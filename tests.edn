@@ -1,0 +1,6 @@
+#kaocha/v1
+{:kaocha.watch/ignore ["**/#*" "**/.#*"]
+ :plugins [:noyoda.plugin/swap-actual-and-expected]
+ :tests [{:id :unit
+          :test-paths ["test"]
+          :source-paths ["src"]}]}
