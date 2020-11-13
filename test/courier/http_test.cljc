@@ -514,7 +514,7 @@
                           [{:status 200
                             :body "Ok!"}]}
            (-> (sut/request {::sut/req {:url "http://example.com/"}})
-               :courier.res/reqs))
+               :courier.res/log))
          [{:req {:method :get
                  :url "http://example.com/"}
            :res {:status 200
@@ -529,7 +529,7 @@
                           [{:status 404
                             :body "Ok!"}]}
            (-> (sut/request {::sut/req {:url "http://example.com/"}})
-               :courier.res/reqs))
+               :courier.res/log))
          [{:req {:method :get
                                  :url "http://example.com/"}
            :res {:status 404

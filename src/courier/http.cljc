@@ -252,7 +252,7 @@
      (select-keys (:res res) [:status :headers :body])
      {:courier.res/success? (:success? res)
       :courier.res/data (:data res)
-      :courier.res/reqs (map #(dissoc % ::event :path) reqs)})))
+      :courier.res/log (map #(dissoc % ::event :path) reqs)})))
 
 (defn request [spec & [opt]]
   (->> {::req spec}
