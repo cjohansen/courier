@@ -86,7 +86,10 @@
                     :spec spec
                     :req req}]
       (emit log ::request exchange)
-      (let [result (prepare-result log (assoc exchange :res (client/request req)))
+      (let [res (client/request req)
+            res #?(:cljs (a/<! res)
+                   :clj res)
+            result (prepare-result log (assoc exchange :res res))
             result (assoc result
                           :cacheable? (try-emit log cacheable? result)
                           :retryable? (try-emit log retryable? result))]
