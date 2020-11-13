@@ -1,9 +1,10 @@
 (ns courier.http-test
   (:require [clojure.core.async :as a]
-            [courier.http :as sut]
+            [clojure.test :refer [deftest is]]
             [courier.cache :as cache]
             [courier.client :as client]
-            [clojure.test :refer [deftest is]]))
+            [courier.http :as sut]
+            [courier.time :as time]))
 
 ;; Helper tooling
 
@@ -281,6 +282,22 @@
            :data "Oh yeah!"
            ::sut/event ::sut/load-from-cache}])))
 
+(deftest does-not-load-expired-result-from-cache
+  (is (= (let [cache (atom {[::sut/req {:method :get
+                                        :url "http://example.com/"}]
+                            {:req {:method :get
+                                   :url "http://example.com"}
+                             :res {:status 200
+                                   :body "Oh yeah!"}
+                             :expires-at (time/add-millis (time/now) -10)}})]
+           (->> {:example {::sut/req {:url "http://example.com/"}}}
+                (sut/make-requests {:cache (cache/from-atom-map cache)})
+                sut/collect!!
+                (map summarize-event)))
+         [[::sut/request :example [:get "http://example.com/"]]
+          [::sut/response :example [200 {:request {:url "http://example.com/"
+                                                   :method :get}}]]])))
+
 (deftest uses-cached-dependent-request
   (is (= (let [cache (atom {[::sut/req {:method :post
                                         :url "http://example.com/security/"}]
@@ -374,6 +391,34 @@
          [[:courier.http/request nil]
           [:courier.http/response {:content "Skontent"}]
           [:courier.http/load-from-cache {:content "Skontent"}]])))
+
+(deftest caches-result-with-expiry
+  (is (<= 3600000
+          (let [now (time/now)]
+            (with-responses {[:get "https://example.com/"]
+                             [{:status 200
+                               :body {:content "Skontent"}}]}
+              (let [cache (atom {})]
+                (->> {:example {::sut/req {:url "https://example.com/"}
+                                ::sut/cache-for (* 60 60 1000)}}
+                     (sut/make-requests {:cache (cache/from-atom-map cache)})
+                     sut/collect!!)
+                (- (-> @cache first second :expires-at time/millis) (time/millis now)))))
+          3600010)))
+
+(deftest caches-result-with-expiry-function
+  (is (<= 100
+          (let [now (time/now)]
+            (with-responses {[:get "https://example.com/"]
+                             [{:status 200
+                               :body {:ttl 100}}]}
+              (let [cache (atom {})]
+                (->> {:example {::sut/req {:url "https://example.com/"}
+                                ::sut/cache-for-fn #(-> % :body :ttl)}}
+                     (sut/make-requests {:cache (cache/from-atom-map cache)})
+                     sut/collect!!)
+                (- (-> @cache first second :expires-at time/millis) (time/millis now)))))
+          110)))
 
 (deftest retries-bypassing-the-cache-for-refreshed
   (is (= (with-responses {[:post "https://example.com/security/"]

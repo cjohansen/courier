@@ -1,10 +1,10 @@
 (ns courier.cache
   (:require [clojure.string :as str]
-            [courier.fingerprint :as fingerprint]))
+            [courier.time :as time]))
 
 (defprotocol Cache
-  (lookup [_ k])
-  (put [_ k res]))
+  (lookup [_ spec params])
+  (put [_ spec params res]))
 
 (defn fname [f]
   (when-let [name (some-> f str (str/replace #"_" "-"))]
@@ -61,22 +61,23 @@
           (format "ref must be an atom, was %s" (type ref)))
   (assert (or (map? @ref) (nil? @ref)) "ref must contain nil or a map")
   (reify Cache
-    (lookup [_ k]
-      (get @ref k))
-    (put [_ k res]
-      (swap! ref assoc k res))))
+    (lookup [_ spec params]
+      (get @ref (cache-key spec params)))
+    (put [_ spec params res]
+      (swap! ref assoc (cache-key spec params) res))))
 
-(comment
-  (def backend (atom {}))
-  (def cache (from-atom-map backend))
+(defn retrieve [cache spec params]
+  (when-let [res (lookup cache spec params)]
+    (when (or (not (int? (:expires-at res)))
+              (time/before? (time/now) (:expires-at res)))
+      res)))
 
-  (fingerprint/fingerprint
-   (make-key cache {:courier.http/req {:method :get
-                                       :headers {"Content-Type" "application/json"}
-                                       :url "http://example.com"}}
-             {}))
+(defn cacheable [result]
+  (let [{:courier.http/keys [cache-for cache-for-fn]} (:spec result)
+        ttl (or cache-for
+                (when (ifn? cache-for-fn) (cache-for-fn (:res result))))]
+    (cond-> (select-keys result [:req :res :path])
+      (number? ttl) (assoc :expires-at (time/add-millis (time/now) ttl)))))
 
-  (make-key cache {:courier.http/req {:method :get
-                                      :url "http://example.com"}}
-            {})
-  )
+(defn store [cache spec params res]
+  (put cache spec params (cacheable res)))

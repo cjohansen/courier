@@ -74,8 +74,8 @@
 
 (defn maybe-cache-result [spec ctx cache result]
   (when (and (:cacheable? result) cache)
-    (let [k (cache/cache-key spec (:params (cache-params spec ctx)))]
-      (cache/put cache k (select-keys result [:req :res :path])))))
+    (let [params (:params (cache-params spec ctx))]
+      (cache/store cache spec params result))))
 
 (defn make-request [log spec ctx path exchanges cache]
   (a/go
@@ -129,7 +129,7 @@
         {:keys [required params]} (cache-params spec ctx)]
     (when (and (not (:refresh? spec))
                (= (count required) (count params)))
-      (when-let [cached (cache/lookup cache (cache/cache-key spec params))]
+      (when-let [cached (cache/retrieve cache spec params)]
         (prepare-result log (assoc cached :path k :spec spec))))))
 
 (defn lookup-cache [log specs ctx ks all-exchanges cache]
