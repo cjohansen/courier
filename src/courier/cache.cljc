@@ -33,7 +33,7 @@
        (map (fn [[h v]] [(str/lower-case h) v]))
        (into {})))
 
-(defn cache-relevant-params [{:courier.http/keys [id req-fn req]} params]
+(defn get-cache-relevant-params [{:courier.http/keys [id req-fn req]} params]
   (or (when id params)
       (when req-fn params)
       (let [[url query-string] (str/split (:url req) #"\?")]
@@ -54,10 +54,7 @@
            {:cache-params params})))))
 
 (defn cache-key [spec params]
-  [(cache-id spec) (cache-relevant-params spec params)])
-
-(cache-key
- {:courier.http/req {:url "http://example.com/?id=42"}} nil)
+  [(cache-id spec) (get-cache-relevant-params spec params)])
 
 (defn from-atom-map [ref]
   (assert (instance? clojure.lang.Atom ref)
