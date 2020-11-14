@@ -351,6 +351,20 @@
                 (map (juxt ::sut/event :data))))
          [[:courier.http/load-from-cache "I'm cached!"]])))
 
+(deftest looks-up-cache-entry-without-params
+  (is (= (let [cache (atom {[:example nil]
+                            {:req {:method :get
+                                   :url "http://example.com/42"}
+                             :res {:status 200
+                                   :body "I'm cached!"}}})]
+           (->> {:example {::sut/id :example
+                           ::sut/req-fn (fn [params]
+                                          {:url (str "http://example.com/42")})}}
+                (sut/make-requests {:cache (cache/from-atom-map cache)})
+                sut/collect!!
+                (map (juxt ::sut/event :data))))
+         [[:courier.http/load-from-cache "I'm cached!"]])))
+
 (deftest skips-dependent-request-when-result-is-cached
   (is (= (let [cache (atom {[:example {:id 42}]
                             {:req {:method :get

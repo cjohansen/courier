@@ -34,24 +34,26 @@
        (into {})))
 
 (defn get-cache-relevant-params [{:courier.http/keys [id req-fn req]} params]
-  (or (when id params)
-      (when req-fn params)
-      (let [[url query-string] (str/split (:url req) #"\?")]
-        (merge
-         {:method (:method req :get)
-          :url url}
-         (when query-string
-           {:query-params
-            (->> (str/split query-string #"&")
-                 (map #(let [[k & args] (str/split % #"=")]
-                         [(keyword k) (str/join args)]))
-                 (into {}))})
-         (let [params (cond-> (select-keys req [:headers :body])
-                        (:headers req) (update :headers normalize-headers))]
-           (when-not (empty? params)
-             params))
+  (cond
+    (or id req-fn) params
+
+    :default
+    (let [[url query-string] (str/split (:url req) #"\?")]
+      (merge
+       {:method (:method req :get)
+        :url url}
+       (when query-string
+         {:query-params
+          (->> (str/split query-string #"&")
+               (map #(let [[k & args] (str/split % #"=")]
+                       [(keyword k) (str/join args)]))
+               (into {}))})
+       (let [params (cond-> (select-keys req [:headers :body])
+                      (:headers req) (update :headers normalize-headers))]
          (when-not (empty? params)
-           {:cache-params params})))))
+           params))
+       (when-not (empty? params)
+         {:cache-params params})))))
 
 (defn cache-key [spec params]
   [(cache-id spec) (get-cache-relevant-params spec params)])
