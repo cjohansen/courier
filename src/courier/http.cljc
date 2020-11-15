@@ -265,7 +265,9 @@
      (select-keys (:res res) [:status :headers :body])
      {:courier.res/success? (:success? res)
       :courier.res/data (:data res)
-      :courier.res/log (map strip-event reqs)}
+      :courier.res/log (->> reqs
+                            (remove (comp #{::load-from-cache} ::event))
+                            (map strip-event))}
      (when (= ::load-from-cache (::event res))
        {:courier.res/cache-status
         {:cached? true

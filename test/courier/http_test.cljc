@@ -701,11 +701,7 @@
           :body "Oh yeah!"
           :courier.res/success? true
           :courier.res/data "Oh yeah!"
-          :courier.res/log
-          [{:req {:method :get, :url "http://example.com"}
-            :res {:status 200, :body "Oh yeah!"}
-            :success? true
-            :data "Oh yeah!"}]
+          :courier.res/log []
           :courier.res/cache-status {:cached-at nil
                                      :cached? true
                                      :expires-at nil}})))
