@@ -75,7 +75,9 @@
      :params (select-paths ctx required)}))
 
 (defn maybe-cache-result [spec ctx cache result]
-  (when (and (:cacheable? result) cache)
+  (when (and (:cacheable? result)
+             cache
+             (or (::cache-for spec) (::cache-for-fn spec)))
     (let [params (:params (cache-params spec ctx))]
       (cache/store cache spec params result))))
 

@@ -398,19 +398,30 @@
   (is (= (with-responses {[:get "https://example.com/"]
                           [{:status 200
                             :body {:content "Skontent"}}]}
-           (let [cache (atom {})]
+           (let [cache (atom {})
+                 spec {:example {::sut/req {:url "https://example.com/"}
+                                 ::sut/cache-for 100}}]
              (concat
-              (->> {:example {::sut/req {:url "https://example.com/"}}}
-                   (sut/make-requests {:cache (cache/from-atom-map cache)})
+              (->> (sut/make-requests {:cache (cache/from-atom-map cache)} spec)
                    sut/collect!!
                    (map (juxt ::sut/event :data)))
-              (->> {:example {::sut/req {:url "https://example.com/"}}}
-                   (sut/make-requests {:cache (cache/from-atom-map cache)})
+              (->> (sut/make-requests {:cache (cache/from-atom-map cache)} spec)
                    sut/collect!!
                    (map (juxt ::sut/event :data))))))
          [[:courier.http/request nil]
           [:courier.http/response {:content "Skontent"}]
           [:courier.http/load-from-cache {:content "Skontent"}]])))
+
+(deftest does-not-cache-successful-result-with-no-ttl
+  (is (= (with-responses {[:get "https://example.com/"]
+                          [{:status 200
+                            :body {:content "Skontent"}}]}
+           (let [cache (atom {})]
+             (sut/request
+              {::sut/req {:url "https://example.com/"}}
+              {:cache (cache/from-atom-map cache)})
+             @cache))
+         {})))
 
 (deftest caches-and-looks-up-result-in-cache
   (is (= (with-responses {[:get "https://example.com/"]
@@ -419,11 +430,13 @@
            (let [cache (atom {})]
              (concat
               (->> {:example {::sut/id ::example
+                              ::sut/cache-for 100
                               ::sut/req-fn (fn [params] {:url "https://example.com/"})}}
                    (sut/make-requests {:cache (cache/from-atom-map cache)})
                    sut/collect!!
                    (map summarize-event))
               (->> {:example {::sut/id ::example
+                              ::sut/cache-for 100
                               ::sut/req-fn (fn [params] {:url "https://example.com/"})}}
                    (sut/make-requests {:cache (cache/from-atom-map cache)})
                    sut/collect!!
