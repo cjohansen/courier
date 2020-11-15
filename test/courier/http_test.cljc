@@ -454,6 +454,18 @@
                 (- (-> @cache first second :expires-at time/millis) (time/millis now)))))
           110)))
 
+(deftest does-not-cache-the-http-client-on-the-response
+  (is (nil? (with-responses {[:get "https://example.com/"]
+                             [{:status 200
+                               :body {:ttl 100}
+                               :http-client {:stateful "Object"}}]}
+              (let [cache (atom {})]
+                (sut/request
+                 {::sut/req {:url "https://example.com/"}
+                  ::sut/cache-for-fn #(-> % :body :ttl)}
+                 {:cache (cache/from-atom-map cache)})
+                (-> @cache first second :res :http-client))))))
+
 (deftest retries-bypassing-the-cache-for-refreshed
   (is (= (with-responses {[:post "https://example.com/security/"]
                           [{:status 200

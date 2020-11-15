@@ -79,7 +79,8 @@
         ttl (or cache-for
                 (when (ifn? cache-for-fn) (cache-for-fn (:res result))))]
     (cond-> (select-keys result [:req :res :path])
-      (number? ttl) (assoc :expires-at (time/add-millis (time/now) ttl)))))
+      (number? ttl) (assoc :expires-at (time/add-millis (time/now) ttl))
+      :always (update :res dissoc :http-client))))
 
 (defn store [cache spec params res]
   (put cache spec params (cacheable res)))
