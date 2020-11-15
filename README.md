@@ -579,6 +579,25 @@ channel that emits events as they occur:
       (log/error "Failed to complete request" event))))
 ```
 
+## Testing
+
+Courier runs all requests through a multi-method that you can override for
+testing purposes:
+
+```clj
+(require '[courier.client :as client]
+         '[courier.http :as http])
+
+(defmethod client/request [:get "http://example.com"] [req]
+  {:status 200
+   :headers {"content-type" "application/json"}
+   :body {:ok? true}})
+
+(-> (http/request {::http/req {:url "http://example.com"}})
+    ::http/data)
+;;=> {:ok? true}
+```
+
 ## Changelog
 
 ### 2020.11.xx
