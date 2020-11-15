@@ -406,6 +406,26 @@
           [:courier.http/response {:content "Skontent"}]
           [:courier.http/load-from-cache {:content "Skontent"}]])))
 
+(deftest caches-and-looks-up-result-in-cache
+  (is (= (with-responses {[::example nil]
+                          [{:status 200
+                            :body {:content "Skontent"}}]}
+           (let [cache (atom {})]
+             (concat
+              (->> {:example {::sut/id ::example
+                              ::sut/req-fn (fn [params] {:url "https://example.com/"})}}
+                   (sut/make-requests {:cache (cache/from-atom-map cache)})
+                   sut/collect!!
+                   (map summarize-event))
+              (->> {:example {::sut/id ::example
+                              ::sut/req-fn (fn [params] {:url "https://example.com/"})}}
+                   (sut/make-requests {:cache (cache/from-atom-map cache)})
+                   sut/collect!!
+                   (map summarize-event)))))
+         [[:courier.http/request nil]
+          [:courier.http/response {:content "Skontent"}]
+          [:courier.http/load-from-cache {:content "Skontent"}]])))
+
 (deftest caches-result-with-expiry
   (is (<= 3600000
           (let [now (time/now)]
@@ -623,3 +643,23 @@
                  ::sut/retries 1}))
              :courier.res/success?)
          false)))
+
+(deftest formats-results-from-cache
+  (is (= (let [cache (atom {[::sut/req {:method :get
+                                        :url "http://example.com/"}]
+                            {:req {:method :get
+                                   :url "http://example.com"}
+                             :res {:status 200
+                                   :body "Oh yeah!"}}})]
+           (->> (sut/request
+                 {::sut/req {:url "http://example.com/"}}
+                 {:cache (cache/from-atom-map cache)})))
+         {:status 200
+          :body "Oh yeah!"
+          :courier.res/success? true
+          :courier.res/data "Oh yeah!"
+          :courier.res/log
+          [{:req {:method :get, :url "http://example.com"}
+            :res {:status 200, :body "Oh yeah!"}
+            :success? true
+            :data "Oh yeah!"}]})))

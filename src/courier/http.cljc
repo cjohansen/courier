@@ -246,7 +246,7 @@
   (siphon!! ch nil))
 
 (defn prepare-full-result-for [k events]
-  (let [reqs (filter (comp #{::response} ::event) events)
+  (let [reqs (filter (comp #{::response ::load-from-cache} ::event) events)
         res (last (filter (comp #{k} :path) reqs))]
     (merge
      (select-keys (:res res) [:status :headers :body])
