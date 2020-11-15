@@ -46,7 +46,7 @@
           (:res event) [(summarize-res (:res event))]
           (:courier.error/reason event) [(:courier.error/reason event)
                                          (:courier.error/data event)]
-          (:throwable event) [(-> event :throwable .getMessage)]
+          (:throwable event) [(-> event :throwable .getMessage) (:source event)]
           :default [(summarize-req (:req event))])))
 
 ;; Unit tests
@@ -729,11 +729,28 @@
                {:example {::sut/req {:url "http://example.com/"}}})
               sut/collect!!
               (map summarize-event))
-         [[:courier.http/exception nil "Boom!"]
+         [[:courier.http/exception nil "Boom!" "courier.cache/lookup"]
           [:courier.http/request :example [:get "http://example.com/"]]
           [:courier.http/response :example [200 {:request {:url "http://example.com/"
                                                            :method :get
                                                            :throw-exceptions false}}]]])))
+
+(deftest handles-exceptions-when-storing-cached-objects
+  (is (= (->> (sut/make-requests
+               {:cache (reify cache/Cache
+                         (lookup [_ _ _]
+                           nil)
+                         (put [_ _ _ _]
+                           (throw (ex-info "Boom!" {:boom? true}))))}
+               {:example {::sut/req {:url "http://example.com/"}
+                          ::sut/cache-for 100}})
+              sut/collect!!
+              (map summarize-event))
+         [[:courier.http/request :example [:get "http://example.com/"]]
+          [:courier.http/response :example [200 {:request {:url "http://example.com/"
+                                                           :method :get
+                                                           :throw-exceptions false}}]]
+          [:courier.http/exception nil "Boom!" "courier.cache/put"]])))
 
 (defmethod client/request [:get "https://explosives.com"] [req]
   (throw (ex-info "Boom!" {:boom? true})))

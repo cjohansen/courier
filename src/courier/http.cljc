@@ -74,12 +74,17 @@
     {:required (map (fn [k] (if (coll? k) (first k) k)) required)
      :params (select-paths ctx required)}))
 
-(defn maybe-cache-result [spec ctx cache result]
+(defn maybe-cache-result [log spec ctx cache result]
   (when (and (:cacheable? result)
              cache
              (or (::cache-for spec) (::cache-for-fn spec)))
     (let [params (:params (cache-params spec ctx))]
-      (cache/store cache spec params result))))
+      (try
+        (cache/store cache spec params result)
+        (catch Exception e
+          (emit log ::exception {:throwable e
+                                 :source "courier.cache/put"})
+          nil)))))
 
 (defn fulfill-exchange [log exchange]
   (try
@@ -106,7 +111,7 @@
         (emit log (cond
                     (:res result) ::response
                     (:exception result) ::exception) result)
-        (maybe-cache-result spec ctx cache result)
+        (maybe-cache-result log spec ctx cache result)
         result))))
 
 (defn params-available? [ctx {::keys [params]}]
