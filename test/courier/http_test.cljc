@@ -100,10 +100,12 @@
          [{::sut/event ::sut/request
            :path :example
            :req {:method :get
+                 :throw-exceptions false
                  :url "http://example.com/"}}
           {::sut/event ::sut/response
            :path :example
            :req {:method :get
+                 :throw-exceptions false
                  :url "http://example.com/"}
            :res {:status 200
                  :body {:yep "Indeed"}}
@@ -223,6 +225,7 @@
               :data)
          {:request
           {:url "http://example.com/"
+           :throw-exceptions false
            :params {:token "ejY-secret-..."}
            :method :get}})))
 
@@ -260,6 +263,7 @@
          {:status 200
           :body {:request
                  {:url "http://example.com/"
+                  :throw-exceptions false
                   :headers {"Authorization" "Bearer ejY..."}
                   :method :get}}})))
 
@@ -296,6 +300,7 @@
                 (map summarize-event)))
          [[::sut/request :example [:get "http://example.com/"]]
           [::sut/response :example [200 {:request {:url "http://example.com/"
+                                                   :throw-exceptions false
                                                    :method :get}}]]])))
 
 (deftest uses-cached-dependent-request
@@ -323,6 +328,7 @@
           [:courier.http/response
            {:request
             {:url "http://example.com/"
+             :throw-exceptions false
              :headers {"Authorization" "Bearer T0k3n"}
              :method :get}}]])))
 
@@ -530,6 +536,7 @@
   (is (= (-> (sut/request {::sut/req {:url "http://example.com/"}})
              :courier.res/data)
          {:request {:method :get
+                    :throw-exceptions false
                     :url "http://example.com/"}})))
 
 (deftest communicates-success
@@ -582,6 +589,7 @@
            (-> (sut/request {::sut/req {:url "http://example.com/"}})
                :courier.res/log))
          [{:req {:method :get
+                 :throw-exceptions false
                  :url "http://example.com/"}
            :res {:status 200
                  :body "Ok!"}
@@ -597,9 +605,10 @@
            (-> (sut/request {::sut/req {:url "http://example.com/"}})
                :courier.res/log))
          [{:req {:method :get
-                                 :url "http://example.com/"}
+                 :throw-exceptions false
+                 :url "http://example.com/"}
            :res {:status 404
-                                 :body "Ok!"}
+                 :body "Ok!"}
            :success? false
            :data nil
            :cacheable? false
@@ -621,6 +630,7 @@
                                           {:url "http://example.com/"})})
              :courier.res/data)
          {:request {:method :get
+                    :throw-exceptions false
                     :url "http://example.com/"}})))
 
 (deftest passes-no-params-by-default
@@ -633,6 +643,7 @@
              :courier.res/data
              :request)
          {:method :get
+          :throw-exceptions false
           :url "http://example.com/"
           :params {}})))
 
@@ -645,9 +656,9 @@
               {:params {:client-id "ID"
                         :client-secret "Secret"}})
              :courier.res/data
-             :request
-             )
+             :request)
          {:method :get
+          :throw-exceptions false
           :url "http://example.com/"
           :params {:client-id "ID"}})))
 

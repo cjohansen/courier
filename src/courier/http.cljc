@@ -27,7 +27,9 @@
 
 (defn prepare-request [log {::keys [req req-fn params]} ctx]
   (let [req (or req (try-emit log req-fn (select-keys ctx params)))]
-    (update req :method #(or % :get))))
+    (-> req
+        (update :method #(or % :get))
+        (assoc :throw-exceptions false))))
 
 (defn success? [{:keys [spec res]}]
   (let [f (or (::success? spec) client/success?)]
