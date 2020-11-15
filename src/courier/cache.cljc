@@ -80,7 +80,8 @@
                 (when (ifn? cache-for-fn) (cache-for-fn (:res result))))]
     (cond-> (select-keys result [:req :res :path])
       (number? ttl) (assoc :expires-at (time/add-millis (time/now) ttl))
-      :always (update :res dissoc :http-client))))
+      :always (update :res dissoc :http-client)
+      :always (assoc :cached-at (time/millis (time/now))))))
 
 (defn store [cache spec params res]
   (put cache spec params (cacheable res)))

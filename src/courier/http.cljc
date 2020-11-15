@@ -264,6 +264,11 @@
      {:courier.res/success? (:success? res)
       :courier.res/data (:data res)
       :courier.res/log (map strip-event reqs)}
+     (when (= ::load-from-cache (::event res))
+       {:courier.res/cache-status
+        {:cached? true
+         :cached-at (:cached-at res)
+         :expires-at (:expires-at res)}})
      (when-let [exceptions (seq (filter (comp #{::exception} ::event) events))]
        {:courier.res/exceptions (map strip-event exceptions)}))))
 

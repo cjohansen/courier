@@ -466,6 +466,26 @@
                  {:cache (cache/from-atom-map cache)})
                 (-> @cache first second :res :http-client))))))
 
+(deftest includes-cache-info-on-retrieve
+  (let [cache-status
+        (with-responses {[:get "https://example.com/"]
+                         [{:status 200
+                           :body {:ttl 100}
+                           :http-client {:stateful "Object"}}]}
+          (let [cache (atom {})]
+            (sut/request
+             {::sut/req {:url "https://example.com/"}
+              ::sut/cache-for-fn #(-> % :body :ttl)}
+             {:cache (cache/from-atom-map cache)})
+            (-> (sut/request
+                 {::sut/req {:url "https://example.com/"}
+                  ::sut/cache-for-fn #(-> % :body :ttl)}
+                 {:cache (cache/from-atom-map cache)})
+                :courier.res/cache-status)))]
+    (is (true? (:cached? cache-status)))
+    (is (number? (:cached-at cache-status)))
+    (is (number? (:expires-at cache-status)))))
+
 (deftest retries-bypassing-the-cache-for-refreshed
   (is (= (with-responses {[:post "https://example.com/security/"]
                           [{:status 200
@@ -674,7 +694,10 @@
           [{:req {:method :get, :url "http://example.com"}
             :res {:status 200, :body "Oh yeah!"}
             :success? true
-            :data "Oh yeah!"}]})))
+            :data "Oh yeah!"}]
+          :courier.res/cache-status {:cached-at nil
+                                     :cached? true
+                                     :expires-at nil}})))
 
 (defmethod client/request [:get "https://explosives.com"] [req]
   (throw (ex-info "Boom!" {:boom? true})))

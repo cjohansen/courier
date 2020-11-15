@@ -245,12 +245,10 @@ The `:courier.res/log` list contains maps with the following keys:
 
 The `:courier.res/cache-status` map contains the folowing keys:
 
-- `:courier.cache/cached?` - A boolean
-- `:courier.cache/cached-at` - A full ISO8601 date and time string
-- `:courier.cache/cache-key` - The key the object was cached under
-- `:courier.cache/location` - Set by the cache implementation
-- `:courier.cache/expires-at` - A full ISO8601 date and time string for when the object
-  expires from the cache.
+- `:cached?` - A boolean
+- `:cached-at` - A timestamp (epoch milliseconds) when the object was cached
+- `:expires-at` - A timestamp (epoch milliseconds) when the object expires from
+  the cache.
 
 ### Preparing result data
 
