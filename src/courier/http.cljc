@@ -77,6 +77,15 @@
     (let [params (:params (cache-params spec ctx))]
       (cache/store cache spec params result))))
 
+(defn fulfill-exchange [log exchange]
+  (try
+    (let [res (client/request (:req exchange))
+          res #?(:cljs (a/<! res)
+                 :clj res)]
+      (prepare-result log (assoc exchange :res res)))
+    (catch Exception e
+      (assoc exchange :exception e))))
+
 (defn make-request [log spec ctx path exchanges cache]
   (a/go
     (when-let [delay (get-retry-delay exchanges spec path)]
@@ -86,14 +95,13 @@
                     :spec spec
                     :req req}]
       (emit log ::request exchange)
-      (let [res (client/request req)
-            res #?(:cljs (a/<! res)
-                   :clj res)
-            result (prepare-result log (assoc exchange :res res))
+      (let [result (fulfill-exchange log exchange)
             result (assoc result
                           :cacheable? (try-emit log cacheable? result)
                           :retryable? (try-emit log retryable? result))]
-        (emit log ::response result)
+        (emit log (cond
+                    (:res result) ::response
+                    (:exception result) ::exception) result)
         (maybe-cache-result spec ctx cache result)
         result))))
 
@@ -245,6 +253,9 @@
 (defn collect!! [ch]
   (siphon!! ch nil))
 
+(defn strip-event [e]
+  (dissoc e ::event :path))
+
 (defn prepare-full-result-for [k events]
   (let [reqs (filter (comp #{::response ::load-from-cache} ::event) events)
         res (last (filter (comp #{k} :path) reqs))]
@@ -252,7 +263,9 @@
      (select-keys (:res res) [:status :headers :body])
      {:courier.res/success? (:success? res)
       :courier.res/data (:data res)
-      :courier.res/log (map #(dissoc % ::event :path) reqs)})))
+      :courier.res/log (map strip-event reqs)}
+     (when-let [exceptions (seq (filter (comp #{::exception} ::event) events))]
+       {:courier.res/exceptions (map strip-event exceptions)}))))
 
 (defn request [spec & [opt]]
   (->> {::req spec}

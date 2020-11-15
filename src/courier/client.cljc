@@ -5,7 +5,7 @@
 (defn success? [res]
   (http/success? res))
 
-(defmulti request (fn [request] [(:method request) (:url request)]))
+(defmulti request (fn [req] [(:method req) (:url req)]))
 
-(defmethod request :default [request]
-  (http/request request))
+(defmethod request :default [req]
+  (http/request req))

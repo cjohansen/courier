@@ -407,7 +407,7 @@
           [:courier.http/load-from-cache {:content "Skontent"}]])))
 
 (deftest caches-and-looks-up-result-in-cache
-  (is (= (with-responses {[::example nil]
+  (is (= (with-responses {[:get "https://example.com/"]
                           [{:status 200
                             :body {:content "Skontent"}}]}
            (let [cache (atom {})]
@@ -422,9 +422,9 @@
                    (sut/make-requests {:cache (cache/from-atom-map cache)})
                    sut/collect!!
                    (map summarize-event)))))
-         [[:courier.http/request nil]
-          [:courier.http/response {:content "Skontent"}]
-          [:courier.http/load-from-cache {:content "Skontent"}]])))
+         [[::sut/request :example [:get "https://example.com/"]]
+          [::sut/response :example [200 {:content "Skontent"}]]
+          [::sut/load-from-cache :example [200 {:content "Skontent"}]]])))
 
 (deftest caches-result-with-expiry
   (is (<= 3600000
@@ -663,3 +663,12 @@
             :res {:status 200, :body "Oh yeah!"}
             :success? true
             :data "Oh yeah!"}]})))
+
+(defmethod client/request [:get "https://explosives.com"] [req]
+  (throw (ex-info "Boom!" {:boom? true})))
+
+(deftest does-not-trip-on-exceptions-from-the-http-client
+  (let [result (sut/request {::sut/req {:url "https://explosives.com"}})]
+    (is (not (:courier.res/success? result)))
+    (is (nil? (:courier.res/data result)))
+    (is (seq (:courier.res/exceptions result)))))
