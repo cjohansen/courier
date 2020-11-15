@@ -46,6 +46,7 @@
           (:res event) [(summarize-res (:res event))]
           (:courier.error/reason event) [(:courier.error/reason event)
                                          (:courier.error/data event)]
+          (:throwable event) [(-> event :throwable .getMessage)]
           :default [(summarize-req (:req event))])))
 
 ;; Unit tests
@@ -718,6 +719,21 @@
           :courier.res/cache-status {:cached-at nil
                                      :cached? true
                                      :expires-at nil}})))
+
+(deftest handles-exceptions-when-loading-cached-objects
+  (is (= (->> (sut/make-requests
+               {:cache (reify cache/Cache
+                         (lookup [_ _ _]
+                           (throw (ex-info "Boom!" {:boom? true})))
+                         (put [_ _ _ _]))}
+               {:example {::sut/req {:url "http://example.com/"}}})
+              sut/collect!!
+              (map summarize-event))
+         [[:courier.http/exception nil "Boom!"]
+          [:courier.http/request :example [:get "http://example.com/"]]
+          [:courier.http/response :example [200 {:request {:url "http://example.com/"
+                                                           :method :get
+                                                           :throw-exceptions false}}]]])))
 
 (defmethod client/request [:get "https://explosives.com"] [req]
   (throw (ex-info "Boom!" {:boom? true})))

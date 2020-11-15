@@ -141,8 +141,13 @@
         {:keys [required params]} (cache-params spec ctx)]
     (when (and (not (:refresh? spec))
                (= (count required) (count params)))
-      (when-let [cached (cache/retrieve cache spec params)]
-        (prepare-result log (assoc cached :path k :spec spec))))))
+      (try
+        (when-let [cached (cache/retrieve cache spec params)]
+          (prepare-result log (assoc cached :path k :spec spec)))
+        (catch Exception e
+          (emit log ::exception {:throwable e
+                                 :source "courier.cache/lookup"})
+          nil)))))
 
 (defn lookup-cache [log specs ctx ks all-exchanges cache]
   (when cache
