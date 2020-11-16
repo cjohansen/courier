@@ -14,7 +14,8 @@ Courier offers:
 As an example, you can declare that a request requires an OAuth token, and
 Courier will either find one in the cache, or make a separate request to fetch
 one (**or** refresh the cached one if using it implies it's expired), making
-sure to retry failures and handle all nitty-gritty of this interaction for you.
+sure to retry failures and handle all the nitty-gritty intricacies of this
+interaction for you.
 
 Courier's caching and retry mechanisms do not expect all the HTTP endpoints in
 the world to be perfectly spec-compliant, and allows you to tune them to a
