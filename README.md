@@ -11,11 +11,12 @@ Courier offers:
 - Retries
 - Inter-request dependencies
 
-With Courier, you can request some data with an OAuth token that is either found
-in the cache, or retrieved with a separate request. All without having to
-manually possibly failing requests.
+As an example, you can declare that a request requires an OAuth token, and
+Courier will either find one in the cache, or make a separate request to fetch
+one (**or** refresh the cached one if using it implies it's expired), making
+sure to retry failures and handle all nitty-gritty of this interaction for you.
 
-Courier's caching and retry mechanisms does not expect all the HTTP endpoints in
+Courier's caching and retry mechanisms do not expect all the HTTP endpoints in
 the world to be perfectly spec-compliant, and allows you to tune them to a
 priori information about the APIs you're working with.
 
@@ -33,7 +34,7 @@ libraries under the hood:
   (http/request
    {:req {:method :get
           :url "http://example.com/api/demo"} ;; 1
-    :retry-fn (http/retry-fn {:retrues 2})})) ;; 2
+    :retry-fn (http/retry-fn {:retries 2})})) ;; 2
 
 (when (:success? res)
   (prn (:body res)))
