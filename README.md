@@ -98,7 +98,7 @@ more low-level HTTP clients:
            :client-secret "api-secret"
            :playlist-id "3abdc"
            :token {::http/req spotify-token-request ;; 12
-                   ::http/select-fn (comp :access_token :body)}}}) ;; 13
+                   ::http/select (comp :access_token :body)}}}) ;; 13
 ```
 
 1. `:params` informs Courier of which parameters are required to make this
@@ -238,7 +238,7 @@ Even better, let Courier manage the dependency:
 (http/request
  spotify-playlist-request
  {:params {:token {::http/req spotify-token-request
-                   ::http/select-fn (comp :access_token :body)}}})
+                   ::http/select (comp :access_token :body)}}})
 
 ```
 
