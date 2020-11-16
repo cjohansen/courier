@@ -30,7 +30,7 @@
    (a/go-loop [res []]
      (let [start (sut/now)]
        (if-let [event (a/<! ch)]
-         (recur (conj res {:event (::sut/event event)
+         (recur (conj res {:event (:event event)
                            :elapsed (- (sut/now) start)}))
          res)))))
 
@@ -41,7 +41,7 @@
   (into [status] (remove nil? [headers body])))
 
 (defn summarize-event [event]
-  (into ((juxt ::sut/event :path) event)
+  (into (vec (remove nil? ((juxt :event :path) event)))
         (cond
           (:res event) [(summarize-res (:res event))]
           (:courier.error/reason event) [(:courier.error/reason event)
@@ -51,41 +51,41 @@
 
 ;; Unit tests
 
-(deftest cache-params-uses-all-params-by-defaut
-  (is (= (sut/cache-params {::sut/params [:token :id]}
-                           {:token "ejY..."
-                            :id 42})
+(deftest lookup-params-uses-all-params-by-defaut
+  (is (= (sut/lookup-params {:params [:token :id]}
+                            {:token "ejY..."
+                             :id 42})
          {:required [:token :id]
           :params {:token "ejY..."
                    :id 42}})))
 
-(deftest cache-params-uses-only-cache-params
-  (is (= (sut/cache-params {::sut/params [:token :id]
-                            ::sut/cache-params [:id]}
-                           {:token "ejY..."
-                            :id 42})
+(deftest lookup-params-uses-only-lookup-params
+  (is (= (sut/lookup-params {:params [:token :id]
+                             :lookup-params [:id]}
+                            {:token "ejY..."
+                             :id 42})
          {:required [:id]
           :params {:id 42}})))
 
-(deftest cache-params-with-surgical-selections
-  (is (= (sut/cache-params {::sut/params [:token :config :id]
-                            ::sut/cache-params [[:config :host] :id]}
-                           {:token "ejY..."
-                            :id 42
-                            :config {:host "example.com"
-                                     :client-id "..."
-                                     :client-secret "..."}})
+(deftest lookup-params-with-surgical-selections
+  (is (= (sut/lookup-params {:params [:token :config :id]
+                             :lookup-params [[:config :host] :id]}
+                            {:token "ejY..."
+                             :id 42
+                             :config {:host "example.com"
+                                      :client-id "..."
+                                      :client-secret "..."}})
          {:required [:config :id]
           :params {:id 42
                    :config {:host "example.com"}}})))
 
-(deftest cache-params-with-no-params
-  (is (= (sut/cache-params {}
-                           {:token "ejY..."
-                            :id 42
-                            :config {:host "example.com"
-                                     :client-id "..."
-                                     :client-secret "..."}})
+(deftest lookup-params-with-no-params
+  (is (= (sut/lookup-params {}
+                            {:token "ejY..."
+                             :id 42
+                             :config {:host "example.com"
+                                      :client-id "..."
+                                      :client-secret "..."}})
          {:required []
           :params nil})))
 
@@ -95,32 +95,29 @@
   (is (= (with-responses {[:get "http://example.com/"]
                           [{:status 200
                             :body {:yep "Indeed"}}]}
-           (->> {:example {::sut/req {:url "http://example.com/"}}}
+           (->> {:example {:req {:url "http://example.com/"}}}
                 (sut/make-requests {})
                 sut/collect!!))
-         [{::sut/event ::sut/request
+         [{:event ::sut/request
            :path :example
            :req {:method :get
                  :throw-exceptions false
                  :url "http://example.com/"}}
-          {::sut/event ::sut/response
+          {:event ::sut/response
            :path :example
            :req {:method :get
                  :throw-exceptions false
                  :url "http://example.com/"}
            :res {:status 200
                  :body {:yep "Indeed"}}
-           :success? true
-           :data {:yep "Indeed"}
-           :cacheable? true
-           :retryable? false}])))
+           :success? true}])))
 
 (deftest determines-failure-with-custom-fn
   (is (false? (with-responses {[:get "http://example.com/"]
                                [{:status 200
                                  :body {:yep "Indeed"}}]}
-                (->> {:example {::sut/req {:url "http://example.com/"}
-                                ::sut/success? #(= 201 (:status %))}}
+                (->> {:example {:req {:url "http://example.com/"}
+                                :success? #(= 201 (-> % :res :status))}}
                      (sut/make-requests {})
                      sut/collect!!
                      second
@@ -128,10 +125,10 @@
 
 (deftest determines-success-with-custom-fn
   (is (true? (with-responses {[:get "http://example.com/"]
-                              [{:status 201
+                              [{:status 301
                                 :body {:yep "Indeed"}}]}
-               (->> {:example {::sut/req {:url "http://example.com/"}
-                               ::sut/success? #(= 201 (:status %))}}
+               (->> {:example {:req {:url "http://example.com/"}
+                               :success? #(= 301 (-> % :res :status))}}
                     (sut/make-requests {})
                     sut/collect!!
                     second
@@ -141,32 +138,20 @@
   (is (false? (with-responses {[:get "http://example.com/"]
                                [{:status 201
                                  :body {:yep "Indeed"}}]}
-                (->> {:example {::sut/req {:url "http://example.com/"}
-                                ::sut/success? (fn [_] (throw (ex-info "Oops!" {})))}}
+                (->> {:example {:req {:url "http://example.com/"}
+                                :success? (fn [_] (throw (ex-info "Oops!" {})))}}
                      (sut/make-requests {})
                      sut/collect!!
                      (drop 2)
                      first
                      :success?)))))
 
-(deftest computes-resulting-data-with-custom-fn
-  (is (= (with-responses {[:get "http://example.com/"]
-                          [{:status 201
-                            :body {:yep "Indeed"}}]}
-           (->> {:example {::sut/req {:url "http://example.com/"}
-                           ::sut/data-fn #(-> % :body :yep)}}
-                (sut/make-requests {})
-                sut/collect!!
-                second
-                :data))
-         "Indeed")))
-
 (deftest emits-retry-event
   (is (= (with-responses {[:get "http://example.com/"]
                           [{:status 500}
                            {:status 200 :body {:ok? true}}]}
-           (->> {:example {::sut/req {:url "http://example.com/"}
-                           ::sut/retries 2}}
+           (->> {:example {:req {:url "http://example.com/"}
+                           :retry-fn (sut/retry-fn {:retries 2})}}
                 (sut/make-requests {})
                 sut/collect!!
                 (map summarize-event)))
@@ -183,9 +168,9 @@
                             {:status 500}
                             {:status 500}
                             {:status 200 :body {:ok? true}}]}
-            (->> {:example {::sut/req {:url "http://example.com/"}
-                            ::sut/retries 4
-                            ::sut/retry-delays [5 10 20]}}
+            (->> {:example {:req {:url "http://example.com/"}
+                            :retry-fn (sut/retry-fn {:retries 4
+                                                     :delays [5 10 20]})}}
                  (sut/make-requests {})
                  time-events!!
                  (map :elapsed)
@@ -199,9 +184,9 @@
                            {:status 500}
                            {:status 500}
                            {:status 200 :body {:ok? true}}]}
-           (->> {:example {::sut/req {:url "http://example.com/"}
-                           ::sut/retries 1
-                           ::sut/retry-delays [5 10 20]}}
+           (->> {:example {:req {:url "http://example.com/"}
+                           :retry-fn (sut/retry-fn {:retries 1
+                                                    :delays [5 10 20]})}}
                 (sut/make-requests {})
                 sut/collect!!
                 (map summarize-event)))
@@ -209,21 +194,22 @@
           [::sut/response :example [500]]
           [::sut/request :example [:get "http://example.com/"]]
           [::sut/response :example [500]]
-          [::sut/failed :example :courier.error/retries-exhausted {:retries 1
+          [::sut/failed :example :courier.error/retries-exhausted {:max-retries 1
                                                                    :attempts 2}]])))
 
 (deftest passes-named-parameters-to-req-fn
-  (is (= (->> {:example {::sut/req-fn (fn [params]
-                                        {:url "http://example.com/"
-                                         :params params})
-                         ::sut/params [:token]}}
+  (is (= (->> {:example {:req-fn (fn [params]
+                                   {:url "http://example.com/"
+                                    :params params})
+                         :params [:token]}}
               (sut/make-requests
                {:params
                 {:token "ejY-secret-..."
                  :other "Stuff"}})
               sut/collect!!
               second
-              :data)
+              :res
+              :body)
          {:request
           {:url "http://example.com/"
            :throw-exceptions false
@@ -231,16 +217,16 @@
            :method :get}})))
 
 (deftest cannot-make-request-without-required-data
-  (is (= (->> {:example {::sut/req-fn (fn [params]
-                                        {:url "http://example.com/"
-                                         :params params})
-                         ::sut/params [:token :spoken]}}
+  (is (= (->> {:example {:req-fn (fn [params]
+                                   {:url "http://example.com/"
+                                    :params params})
+                         :params [:token :spoken]}}
               (sut/make-requests
                {:params
                 {:token "ejY-secret-..."
                  :other "Stuff"}})
               sut/collect!!)
-         [{::sut/event ::sut/failed
+         [{:event ::sut/failed
            :path :example
            :courier.error/reason :courier.error/missing-params
            :courier.error/data [:spoken]}])))
@@ -248,15 +234,16 @@
 (deftest makes-dependent-request-first
   (is (= (with-responses {[:post "http://example.com/security/"]
                           [{:status 200 :body {:token "ejY..."}}]}
-           (->> {:example {::sut/req-fn (fn [{:keys [token]}]
-                                          {:url "http://example.com/"
-                                           :headers {"Authorization" (str "Bearer " token)}})
-                           ::sut/params [:token]}}
+           (->> {:example {:req-fn (fn [{:keys [token]}]
+                                     (prn "===>" token)
+                                     {:url "http://example.com/"
+                                      :headers {"Authorization" (str "Bearer " token)}})
+                           :params [:token]}}
                 (sut/make-requests
                  {:params
-                  {:token {::sut/req {:method :post
-                                      :url "http://example.com/security/"}
-                           ::sut/data-fn (comp :token :body)}
+                  {:token {::sut/req {:req {:method :post
+                                            :url "http://example.com/security/"}}
+                           ::sut/select (comp :token :body)}
                    :other "Stuff"}})
                 sut/collect!!
                 last
@@ -275,7 +262,7 @@
                                    :url "http://example.com"}
                              :res {:status 200
                                    :body "Oh yeah!"}}})]
-           (->> {:example {::sut/req {:url "http://example.com/"}}}
+           (->> {:example {:req {:url "http://example.com/"}}}
                 (sut/make-requests {:cache (cache/from-atom-map cache)})
                 sut/collect!!))
          [{:req {:method :get
@@ -284,8 +271,7 @@
                  :body "Oh yeah!"}
            :path :example
            :success? true
-           :data "Oh yeah!"
-           ::sut/event ::sut/load-from-cache}])))
+           :event ::sut/cache-hit}])))
 
 (deftest does-not-load-expired-result-from-cache
   (is (= (let [cache (atom {[::sut/req {:method :get
@@ -295,7 +281,7 @@
                              :res {:status 200
                                    :body "Oh yeah!"}
                              :expires-at (time/add-millis (time/now) -10)}})]
-           (->> {:example {::sut/req {:url "http://example.com/"}}}
+           (->> {:example {:req {:url "http://example.com/"}}}
                 (sut/make-requests {:cache (cache/from-atom-map cache)})
                 sut/collect!!
                 (map summarize-event)))
@@ -311,27 +297,29 @@
                                    :url "http://example.com/security/"}
                              :res {:status 200
                                    :body {:token "T0k3n"}}}})]
-           (->> {:example {::sut/id :example
-                           ::sut/req-fn (fn [{:keys [id token]}]
-                                          {:url (str "http://example.com/" id)
-                                           :headers {"Authorization" (str "Bearer " token)}})
-                           ::sut/params [:token]}}
+           (->> {:example {:id :example
+                           :req-fn (fn [{:keys [id token]}]
+                                     {:url (str "http://example.com/" id)
+                                      :headers {"Authorization" (str "Bearer " token)}})
+                           :params [:token]}}
                 (sut/make-requests
                  {:cache (cache/from-atom-map cache)
                   :params
-                  {:token {::sut/req {:method :post
-                                      :url "http://example.com/security/"}
-                           ::sut/data-fn (comp :token :body)}}})
+                  {:token {::sut/req {:req {:method :post
+                                            :url "http://example.com/security/"}}
+                           ::sut/select (comp :token :body)}}})
                 sut/collect!!
-                (map (juxt ::sut/event :data))))
-         [[:courier.http/load-from-cache "T0k3n"]
-          [:courier.http/request nil]
-          [:courier.http/response
-           {:request
-            {:url "http://example.com/"
-             :throw-exceptions false
-             :headers {"Authorization" "Bearer T0k3n"}
-             :method :get}}]])))
+                (map summarize-event)
+                ))
+         [[::sut/cache-hit :token [200 {:token "T0k3n"}]]
+          [::sut/request :example
+           [:get "http://example.com/" {"Authorization" "Bearer T0k3n"}]]
+          [::sut/response :example
+           [200 {:request
+                 {:url "http://example.com/"
+                  :headers {"Authorization" "Bearer T0k3n"}
+                  :method :get
+                  :throw-exceptions false}}]]])))
 
 (deftest uses-surgical-cache-key-for-lookup
   (is (= (let [cache (atom {[:example {:id 42 :config {:host "example.com"}}]
@@ -339,24 +327,24 @@
                                    :url "http://example.com/42"}
                              :res {:status 200
                                    :body "I'm cached!"}}})]
-           (->> {:example {::sut/id :example
-                           ::sut/req-fn (fn [{:keys [id token config]}]
-                                          {:url (str "http://" (:host config) "/" id)
-                                           :headers {"Authorization" (str "Bearer " token)}})
-                           ::sut/params [:id :config :token]
-                           ::sut/cache-params [[:config :host] :id]}}
+           (->> {:example {:id :example
+                           :req-fn (fn [{:keys [id token config]}]
+                                     {:url (str "http://" (:host config) "/" id)
+                                      :headers {"Authorization" (str "Bearer " token)}})
+                           :params [:id :config :token]
+                           :lookup-params [[:config :host] :id]}}
                 (sut/make-requests
                  {:cache (cache/from-atom-map cache)
                   :params
-                  {:token {::sut/req {:method :post
-                                      :url "http://example.com/security/"}
-                           ::sut/data-fn (comp :token :body)}
+                  {:token {::sut/req {:req {:method :post
+                                            :url "http://example.com/security/"}}
+                           ::sut/select (comp :token :body)}
                    :id 42
                    :config {:host "example.com"
                             :debug? true}}})
                 sut/collect!!
-                (map (juxt ::sut/event :data))))
-         [[:courier.http/load-from-cache "I'm cached!"]])))
+                (map summarize-event)))
+         [[:courier.http/cache-hit :example [200 "I'm cached!"]]])))
 
 (deftest looks-up-cache-entry-without-params
   (is (= (let [cache (atom {[:example nil]
@@ -364,13 +352,13 @@
                                    :url "http://example.com/42"}
                              :res {:status 200
                                    :body "I'm cached!"}}})]
-           (->> {:example {::sut/id :example
-                           ::sut/req-fn (fn [params]
-                                          {:url (str "http://example.com/42")})}}
+           (->> {:example {:id :example
+                           :req-fn (fn [params]
+                                     {:url (str "http://example.com/42")})}}
                 (sut/make-requests {:cache (cache/from-atom-map cache)})
                 sut/collect!!
-                (map (juxt ::sut/event :data))))
-         [[:courier.http/load-from-cache "I'm cached!"]])))
+                (map summarize-event)))
+         [[:courier.http/cache-hit :example [200 "I'm cached!"]]])))
 
 (deftest skips-dependent-request-when-result-is-cached
   (is (= (let [cache (atom {[:example {:id 42}]
@@ -378,40 +366,40 @@
                                    :url "http://example.com/42"}
                              :res {:status 200
                                    :body "I'm cached!"}}})]
-           (->> {:example {::sut/id :example
-                           ::sut/req-fn (fn [{:keys [id token]}]
-                                          {:url (str "http://example.com/" id)
-                                           :headers {"Authorization" (str "Bearer " token)}})
-                           ::sut/params [:id :token]
-                           ::sut/cache-params [:id]}}
+           (->> {:example {:id :example
+                           :req-fn (fn [{:keys [id token]}]
+                                     {:url (str "http://example.com/" id)
+                                      :headers {"Authorization" (str "Bearer " token)}})
+                           :params [:id :token]
+                           :lookup-params [:id]}}
                 (sut/make-requests
                  {:cache (cache/from-atom-map cache)
                   :params
-                  {:token {::sut/req {:method :post
-                                      :url "http://example.com/security/"}
-                           ::sut/data-fn (comp :token :body)}
+                  {:token {:req {:method :post
+                                 :url "http://example.com/security/"}}
                    :id 42}})
                 sut/collect!!
-                (map (juxt ::sut/event :data))))
-         [[:courier.http/load-from-cache "I'm cached!"]])))
+                (map summarize-event)))
+         [[:courier.http/cache-hit :example [200 "I'm cached!"]]])))
 
-(deftest caches-successful-result-from-cache
+(deftest caches-successful-result-and-reuses-it
   (is (= (with-responses {[:get "https://example.com/"]
                           [{:status 200
                             :body {:content "Skontent"}}]}
-           (let [cache (atom {})
-                 spec {:example {::sut/req {:url "https://example.com/"}
-                                 ::sut/cache-for 100}}]
+           (let [cache (cache/from-atom-map (atom {}))
+                 spec {:example {:req {:url "https://example.com/"}
+                                 :cache-fn (sut/cache-fn {:ttl 100})}}]
              (concat
-              (->> (sut/make-requests {:cache (cache/from-atom-map cache)} spec)
+              (->> (sut/make-requests {:cache cache} spec)
                    sut/collect!!
-                   (map (juxt ::sut/event :data)))
-              (->> (sut/make-requests {:cache (cache/from-atom-map cache)} spec)
+                   (map summarize-event))
+              (->> (sut/make-requests {:cache cache} spec)
                    sut/collect!!
-                   (map (juxt ::sut/event :data))))))
-         [[:courier.http/request nil]
-          [:courier.http/response {:content "Skontent"}]
-          [:courier.http/load-from-cache {:content "Skontent"}]])))
+                   (map summarize-event)))))
+         [[::sut/request :example [:get "https://example.com/"]]
+          [::sut/response :example [200 {:content "Skontent"}]]
+          [::sut/cache-response [200 {:content "Skontent"}]]
+          [::sut/cache-hit :example [200 {:content "Skontent"}]]])))
 
 (deftest does-not-cache-successful-result-with-no-ttl
   (is (= (with-responses {[:get "https://example.com/"]
@@ -419,7 +407,20 @@
                             :body {:content "Skontent"}}]}
            (let [cache (atom {})]
              (sut/request
-              {::sut/req {:url "https://example.com/"}}
+              {:req {:url "https://example.com/"}}
+              {:cache (cache/from-atom-map cache)})
+             @cache))
+         {})))
+
+(deftest does-not-cache-uncacheable-successful-result
+  (is (= (with-responses {[:get "https://example.com/"]
+                          [{:status 200
+                            :body {:content "Skontent"}}]}
+           (let [cache (atom {})]
+             (sut/request
+              {:req {:url "https://example.com/"}
+               :cache-fn (sut/cache-fn {:cacheable? (constantly false)
+                                        :ttl 100})}
               {:cache (cache/from-atom-map cache)})
              @cache))
          {})))
@@ -428,23 +429,24 @@
   (is (= (with-responses {[:get "https://example.com/"]
                           [{:status 200
                             :body {:content "Skontent"}}]}
-           (let [cache (atom {})]
+           (let [cache (cache/from-atom-map (atom {}))
+                 spec {:id ::example
+                       :cache-fn (sut/cache-fn {:ttl 100})
+                       :req-fn (fn [params]
+                                 {:url "https://example.com/"})}]
              (concat
-              (->> {:example {::sut/id ::example
-                              ::sut/cache-for 100
-                              ::sut/req-fn (fn [params] {:url "https://example.com/"})}}
-                   (sut/make-requests {:cache (cache/from-atom-map cache)})
+              (->> {:example spec}
+                   (sut/make-requests {:cache cache})
                    sut/collect!!
                    (map summarize-event))
-              (->> {:example {::sut/id ::example
-                              ::sut/cache-for 100
-                              ::sut/req-fn (fn [params] {:url "https://example.com/"})}}
-                   (sut/make-requests {:cache (cache/from-atom-map cache)})
+              (->> {:example spec}
+                   (sut/make-requests {:cache cache})
                    sut/collect!!
                    (map summarize-event)))))
          [[::sut/request :example [:get "https://example.com/"]]
           [::sut/response :example [200 {:content "Skontent"}]]
-          [::sut/load-from-cache :example [200 {:content "Skontent"}]]])))
+          [::sut/cache-response [200 {:content "Skontent"}]]
+          [::sut/cache-hit :example [200 {:content "Skontent"}]]])))
 
 (deftest caches-result-with-expiry
   (is (<= 3600000
@@ -453,8 +455,8 @@
                              [{:status 200
                                :body {:content "Skontent"}}]}
               (let [cache (atom {})]
-                (->> {:example {::sut/req {:url "https://example.com/"}
-                                ::sut/cache-for (* 60 60 1000)}}
+                (->> {:example {:req {:url "https://example.com/"}
+                                :cache-fn (sut/cache-fn {:ttl (* 60 60 1000)})}}
                      (sut/make-requests {:cache (cache/from-atom-map cache)})
                      sut/collect!!)
                 (- (-> @cache first second :expires-at time/millis) (time/millis now)))))
@@ -467,41 +469,63 @@
                              [{:status 200
                                :body {:ttl 100}}]}
               (let [cache (atom {})]
-                (->> {:example {::sut/req {:url "https://example.com/"}
-                                ::sut/cache-for-fn #(-> % :body :ttl)}}
+                (->> {:example {:req {:url "https://example.com/"}
+                                :cache-fn (sut/cache-fn {:ttl-fn #(-> % :res :body :ttl)})}}
                      (sut/make-requests {:cache (cache/from-atom-map cache)})
                      sut/collect!!)
                 (- (-> @cache first second :expires-at time/millis) (time/millis now)))))
-          110)))
+          120)))
+
+(deftest does-not-cache-if-cache-ttl-fn-throws
+  (is (= (with-responses {[:get "https://example.com/"]
+                          [{:status 200
+                            :body {}}]}
+           (->> {:example {:req {:url "https://example.com/"}
+                           :cache-fn (sut/cache-fn {:ttl-fn (fn [_] (throw (ex-info "Boom!" {})))})}}
+                (sut/make-requests {:cache (cache/from-atom-map (atom {}))})
+                sut/collect!!
+                (map summarize-event)))
+         [[:courier.http/request :example [:get "https://example.com/"]]
+          [:courier.http/exception "Boom!" "cache-fn"]
+          [:courier.http/response :example [200 {}]]])))
+
+(deftest does-not-cache-if-cacheable-fn-throws
+  (is (= (with-responses {[:get "https://example.com/"]
+                          [{:status 200
+                            :body {}}]}
+           (->> {:example {:req {:url "https://example.com/"}
+                           :cache-fn (sut/cache-fn {:cacheable? (fn [_] (throw (ex-info "Boom!" {})))})}}
+                (sut/make-requests {:cache (cache/from-atom-map (atom {}))})
+                sut/collect!!
+                (map summarize-event)))
+         [[:courier.http/request :example [:get "https://example.com/"]]
+          [:courier.http/exception "Boom!" "cache-fn"]
+          [:courier.http/response :example [200 {}]]])))
 
 (deftest does-not-cache-the-http-client-on-the-response
-  (is (nil? (with-responses {[:get "https://example.com/"]
-                             [{:status 200
-                               :body {:ttl 100}
-                               :http-client {:stateful "Object"}}]}
-              (let [cache (atom {})]
-                (sut/request
-                 {::sut/req {:url "https://example.com/"}
-                  ::sut/cache-for-fn #(-> % :body :ttl)}
-                 {:cache (cache/from-atom-map cache)})
-                (-> @cache first second :res :http-client))))))
+  (is (= (with-responses {[:get "https://example.com/"]
+                          [{:status 200
+                            :body {:ttl 100}
+                            :http-client {:stateful "Object"}}]}
+           (let [cache (atom {})]
+             (sut/request
+              {:req {:url "https://example.com/"}
+               :cache-fn (sut/cache-fn {:ttl 100})}
+              {:cache (cache/from-atom-map cache)})
+             (some-> @cache first second :res (select-keys [:http-client]))))
+         {})))
 
 (deftest includes-cache-info-on-retrieve
   (let [cache-status
         (with-responses {[:get "https://example.com/"]
                          [{:status 200
-                           :body {:ttl 100}
-                           :http-client {:stateful "Object"}}]}
-          (let [cache (atom {})]
-            (sut/request
-             {::sut/req {:url "https://example.com/"}
-              ::sut/cache-for-fn #(-> % :body :ttl)}
-             {:cache (cache/from-atom-map cache)})
-            (-> (sut/request
-                 {::sut/req {:url "https://example.com/"}
-                  ::sut/cache-for-fn #(-> % :body :ttl)}
-                 {:cache (cache/from-atom-map cache)})
-                :courier.res/cache-status)))]
+                           :body {:ttl 100}}]}
+          (let [cache (cache/from-atom-map (atom {}))
+                spec {:req {:url "https://example.com/"}
+                      :cache-fn (sut/cache-fn {:ttl-fn #(-> % :res :body :ttl)})}]
+            (sut/request spec {:cache cache})
+            (-> (sut/request spec {:cache cache})
+                :cache-status)))]
     (is (true? (:cached? cache-status)))
     (is (number? (:cached-at cache-status)))
     (is (number? (:expires-at cache-status)))))
@@ -522,139 +546,110 @@
                                :res {:status 200
                                      :body {:token "T0k3n"}}}})]
 
-             (->> {:example {::sut/req-fn (fn [{:keys [token]}]
-                                            {:url "https://example.com/api"
-                                             :headers {"Authorization" (str "Bearer " token)}})
-                             ::sut/params [:token]
-                             ::sut/retries 1
-                             ::sut/retry-refresh-fn (fn [_] [:token])}}
+             (->> {:example {:req-fn (fn [{:keys [token]}]
+                                       {:url "https://example.com/api"
+                                        :headers {"Authorization" (str "Bearer " token)}})
+                             :params [:token]
+                             :retry-fn (sut/retry-fn {:retries 1
+                                                      :refresh [:token]})}}
                   (sut/make-requests
                    {:cache (cache/from-atom-map cache)
                     :params
-                    {:token {::sut/req {:method :post
-                                        :url "https://example.com/security/"}
-                             ::sut/data-fn (comp :token :body)}}})
+                    {:token {::sut/req {:req {:method :post
+                                              :url "https://example.com/security/"}}
+                             ::sut/select (comp :token :body)}}})
                   sut/collect!!
-                  (map (juxt ::sut/event :path :success? :data)))))
-         [[::sut/load-from-cache :token true "T0k3n"]
-          [::sut/request :example nil nil]
-          [::sut/response :example false nil]
-          [::sut/request :token nil nil]
-          [::sut/response :token true "ejY...."]
-          [::sut/request :example nil nil]
-          [::sut/response :example true {:stuff "Stuff"}]])))
+                  (map summarize-event))))
+         [[::sut/cache-hit :token [200 {:token "T0k3n"}]]
+          [::sut/request :example
+           [:get "https://example.com/api" {"Authorization" "Bearer T0k3n"}]]
+          [::sut/response :example [500]]
+          [::sut/request :token [:post "https://example.com/security/"]]
+          [::sut/response :token [200 {:token "ejY...."}]]
+          [::sut/request :example
+           [:get "https://example.com/api" {"Authorization" "Bearer ejY...."}]]
+          [::sut/response :example [200 {:stuff "Stuff"}]]])))
 
 ;; request tests
 
 (deftest makes-basic-request
-  (is (= (-> (sut/request {::sut/req {:url "http://example.com/"}})
-             :courier.res/data)
+  (is (= (:body (sut/request {:req {:url "http://example.com/"}}))
          {:request {:method :get
                     :throw-exceptions false
                     :url "http://example.com/"}})))
 
 (deftest communicates-success
-  (is (-> (sut/request {::sut/req {:url "http://example.com/"}})
-          :courier.res/success?)))
+  (is (-> (sut/request {:req {:url "http://example.com/"}})
+          :success?)))
 
 (deftest communicates-failure
   (is (false? (with-responses {[:get "http://example.com/"]
                                [{:status 404
                                  :body "No"}]}
-                (-> (sut/request {::sut/req {:url "http://example.com/"}})
-                    :courier.res/success?)))))
+                (-> (sut/request {:req {:url "http://example.com/"}})
+                    :success?)))))
 
 (deftest communicates-failure-from-custom-assessment
   (is (false? (with-responses {[:get "http://example.com/"]
                                [{:status 200
                                  :body "No"}]}
-                (-> (sut/request {::sut/req {:url "http://example.com/"}
-                                  ::sut/success? #(= 201 (:status %))})
-                    :courier.res/success?)))))
-
-(deftest has-no-result-when-request-failed
-  (is (nil? (with-responses {[:get "http://example.com/"]
-                             [{:status 404
-                               :body "No"}]}
-              (-> (sut/request {::sut/req {:url "http://example.com/"}})
-                  :courier.res/data)))))
-
-(deftest has-result-when-request-succeeded-by-custom-assessment
-  (is (= (-> (with-responses {[:get "http://example.com/"]
-                              [{:status 404
-                                :body "Oh well"}]}
-               (sut/request {::sut/req {:url "http://example.com/"}
-                             ::sut/success? #(= 404 (:status %))}))
-             :courier.res/data)
-         "Oh well")))
-
-(deftest has-no-result-when-request-failed-by-custom-assessment
-  (is (nil? (with-responses {[:get "http://example.com/"]
-                             [{:status 200
-                               :body "Oh well"}]}
-              (-> (sut/request {::sut/req {:url "http://example.com/"}
-                                ::sut/success? #(= 201 (:status %))})
-                  :courier.res/data)))))
+                (-> (sut/request {:req {:url "http://example.com/"}
+                                  :success? #(= 201 (:status %))})
+                    :success?)))))
 
 (deftest includes-request-log
   (is (= (with-responses {[:get "http://example.com/"]
                           [{:status 200
                             :body "Ok!"}]}
-           (-> (sut/request {::sut/req {:url "http://example.com/"}})
-               :courier.res/log))
+           (-> (sut/request {:req {:url "http://example.com/"}})
+               :log))
          [{:req {:method :get
-                 :throw-exceptions false
-                 :url "http://example.com/"}
+                 :url "http://example.com/"
+                 :throw-exceptions false}
            :res {:status 200
                  :body "Ok!"}
-           :data "Ok!"
-           :success? true
-           :retryable? false
-           :cacheable? true}])))
+           :success? true}])))
 
 (deftest includes-request-log-on-failure
   (is (= (with-responses {[:get "http://example.com/"]
                           [{:status 404
                             :body "Ok!"}]}
-           (-> (sut/request {::sut/req {:url "http://example.com/"}})
-               :courier.res/log))
+           (-> (sut/request {:req {:url "http://example.com/"}})
+               :log))
          [{:req {:method :get
                  :throw-exceptions false
                  :url "http://example.com/"}
            :res {:status 404
                  :body "Ok!"}
-           :success? false
-           :data nil
-           :cacheable? false
-           :retryable? true}])))
+           :success? false}])))
 
 (deftest includes-response-like-keys
   (is (= (with-responses {[:get "http://example.com/"]
                           [{:status 200
                             :headers {"Content-Type" "text/plain"}
                             :body "Ok!"}]}
-           (-> (sut/request {::sut/req {:url "http://example.com/"}})
+           (-> (sut/request {:req {:url "http://example.com/"}})
                (select-keys [:status :headers :body])))
          {:status 200
           :headers {"Content-Type" "text/plain"}
           :body "Ok!"})))
 
 (deftest prepares-request-with-function
-  (is (= (-> (sut/request {::sut/req-fn (fn [_]
-                                          {:url "http://example.com/"})})
-             :courier.res/data)
+  (is (= (-> (sut/request {:req-fn (fn [_]
+                                     {:url "http://example.com/"})})
+             :body)
          {:request {:method :get
                     :throw-exceptions false
                     :url "http://example.com/"}})))
 
 (deftest passes-no-params-by-default
   (is (= (-> (sut/request
-              {::sut/req-fn (fn [params]
-                              {:url "http://example.com/"
-                               :params params})}
+              {:req-fn (fn [params]
+                         {:url "http://example.com/"
+                          :params params})}
               {:params {:client-id "ID"
                         :client-secret "Secret"}})
-             :courier.res/data
+             :body
              :request)
          {:method :get
           :throw-exceptions false
@@ -663,13 +658,13 @@
 
 (deftest passes-specified-params-from-context
   (is (= (-> (sut/request
-              {::sut/req-fn (fn [params]
-                              {:url "http://example.com/"
-                               :params params})
-               ::sut/params [:client-id]}
+              {:req-fn (fn [params]
+                         {:url "http://example.com/"
+                          :params params})
+               :params [:client-id]}
               {:params {:client-id "ID"
                         :client-secret "Secret"}})
-             :courier.res/data
+             :body
              :request)
          {:method :get
           :throw-exceptions false
@@ -683,9 +678,9 @@
                                {:status 200
                                 :body "Yass!"}]}
                (sut/request
-                {::sut/req {:url "http://example.com/"}
-                 ::sut/retries 1}))
-             :courier.res/data)
+                {:req {:url "http://example.com/"}
+                 :retry-fn (sut/retry-fn {:retries 1})}))
+             :body)
          "Yass!")))
 
 (deftest does-not-retry-failed-request-that-is-not-retryable
@@ -695,30 +690,11 @@
                                {:status 200
                                 :body "Yass!"}]}
                (sut/request
-                {::sut/req {:url "http://example.com/"}
-                 ::sut/retryable? #(= 500 (:status %))
-                 ::sut/retries 1}))
-             :courier.res/success?)
+                {:req {:url "http://example.com/"}
+                 :retry-fn (sut/retry-fn {:retryable? #(= 500 (-> % :res :status))
+                                          :retries 1})}))
+             :success?)
          false)))
-
-(deftest formats-results-from-cache
-  (is (= (let [cache (atom {[::sut/req {:method :get
-                                        :url "http://example.com/"}]
-                            {:req {:method :get
-                                   :url "http://example.com"}
-                             :res {:status 200
-                                   :body "Oh yeah!"}}})]
-           (->> (sut/request
-                 {::sut/req {:url "http://example.com/"}}
-                 {:cache (cache/from-atom-map cache)})))
-         {:status 200
-          :body "Oh yeah!"
-          :courier.res/success? true
-          :courier.res/data "Oh yeah!"
-          :courier.res/log []
-          :courier.res/cache-status {:cached-at nil
-                                     :cached? true
-                                     :expires-at nil}})))
 
 (deftest handles-exceptions-when-loading-cached-objects
   (is (= (->> (sut/make-requests
@@ -726,14 +702,14 @@
                          (lookup [_ _ _]
                            (throw (ex-info "Boom!" {:boom? true})))
                          (put [_ _ _ _]))}
-               {:example {::sut/req {:url "http://example.com/"}}})
+               {:example {:req {:url "http://example.com/"}}})
               sut/collect!!
               (map summarize-event))
-         [[:courier.http/exception nil "Boom!" "courier.cache/lookup"]
-          [:courier.http/request :example [:get "http://example.com/"]]
-          [:courier.http/response :example [200 {:request {:url "http://example.com/"
-                                                           :method :get
-                                                           :throw-exceptions false}}]]])))
+         [[::sut/exception "Boom!" "courier.cache/lookup"]
+          [::sut/request :example [:get "http://example.com/"]]
+          [::sut/response :example [200 {:request {:url "http://example.com/"
+                                                   :method :get
+                                                   :throw-exceptions false}}]]])))
 
 (deftest handles-exceptions-when-storing-cached-objects
   (is (= (->> (sut/make-requests
@@ -742,21 +718,20 @@
                            nil)
                          (put [_ _ _ _]
                            (throw (ex-info "Boom!" {:boom? true}))))}
-               {:example {::sut/req {:url "http://example.com/"}
-                          ::sut/cache-for 100}})
+               {:example {:req {:url "http://example.com/"}
+                          :cache-fn (sut/cache-fn {:ttl 100})}})
               sut/collect!!
               (map summarize-event))
          [[:courier.http/request :example [:get "http://example.com/"]]
           [:courier.http/response :example [200 {:request {:url "http://example.com/"
                                                            :method :get
                                                            :throw-exceptions false}}]]
-          [:courier.http/exception nil "Boom!" "courier.cache/put"]])))
+          [:courier.http/exception "Boom!" "courier.cache/put"]])))
 
 (defmethod client/request [:get "https://explosives.com"] [req]
   (throw (ex-info "Boom!" {:boom? true})))
 
 (deftest does-not-trip-on-exceptions-from-the-http-client
-  (let [result (sut/request {::sut/req {:url "https://explosives.com"}})]
-    (is (not (:courier.res/success? result)))
-    (is (nil? (:courier.res/data result)))
-    (is (seq (:courier.res/exceptions result)))))
+  (let [result (sut/request {:req {:url "https://explosives.com"}})]
+    (is (not (:success? result)))
+    (is (seq (:exceptions result)))))

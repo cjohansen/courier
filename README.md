@@ -86,7 +86,7 @@ more low-level HTTP clients:
                :refresh-fn #(when (= 403 (-> % :res :status)) ;; 6
                               [:token])})
 
-   :cache-fn (http/cache-for (* 10 1000))}) ;; 7
+   :cache-fn (http/cache-fn {:ttl (* 10 1000)})}) ;; 7
 
 (def cache (atom (cache/lru-cache-factory {} :threshold 8192))) ;; 8
 
@@ -145,6 +145,7 @@ map also contains other keys, see [the result map](#the-result-map).
 - [Retries](#retry-on-failure)
 - [Caching](#caching)
 - [Events](#events)
+- [Reference](#reference)
 - [Changelog](#changelog)
 
 ## Install
@@ -458,7 +459,7 @@ use of the cache. Consider the playlist request from before:
               :url (format "https://api.spotify.com/playlists/%s"
                            playlist-id)
               :oauth-token token})
-   :cache-fn (http/cache-for (* 10 1000))})
+   :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
 If the `:token` parameter is provided by another request, Courier might have to
@@ -476,7 +477,7 @@ the playlist is cached:
               :url (format "https://api.spotify.com/playlists/%s"
                            playlist-id)
               :oauth-token token})
-   :cache-fn (http/cache-for (* 10 1000))})
+   :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
 With `:lookup-params` in place, `courier.cache/lookup` won't receive the full
@@ -496,7 +497,7 @@ cache key:
               :url (format "https://api.spotify.com/playlists/%s"
                            playlist-id)
               :oauth-token token})
-   :cache-for (http/cache-for (* 10 1000))})
+   :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
 With this spec, the "atom map" cache mentioned earlier will cache a request for
@@ -529,7 +530,7 @@ Let's parameterize the Spotify API host using a configuration map:
                            (:spotify-host config)
                            playlist-id)
               :oauth-token (:access_token token)})
-   :cache-for (http/cache-for (* 10 1000))})
+   :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
 In order to include only the relevant key in the cache key,
@@ -546,7 +547,7 @@ In order to include only the relevant key in the cache key,
                            (:spotify-host config)
                            playlist-id)
               :oauth-token (:access_token token)})
-   :cache-for (http/cache-for (* 10 1000))})
+   :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
 Which will result in the following cache key for the atom map caches:
@@ -633,6 +634,39 @@ testing purposes:
 ;;=> {:ok? true}
 
 ```
+
+## Reference
+
+### `(courier.http/request spec opt)`
+
+`spec` is a map of the following keys:
+
+- `:req` - Inline request map
+- `:req-fn` - A function that computes the request map. Will be called with the
+  parameters named by the `:params` key.
+- `:params` - The parameters to pass to `:req-fn`. This may contain references
+  to other requests - if it does those will be resolved before `:req-fn` is
+  called and this request is carried out.
+- `:lookup-params` - The parameters required to look this request up in the
+  cache. Specifying this has two benefits: avoid using sensitive values like
+  credentials as cache keys, and avoid making dependent requests if a cached
+  response is available.
+- `:success?` - A function that is passed a map of `{:req :res}` and that
+  returns a boolean indicating if the response was a success. The default
+  implementation returns `true` for any 2XX response.
+- `:retry-fn` - A function that is called if the response is not a success. It
+  is passed a map of `{:req :res :num-attempts}` (the latter being the number of
+  attempts already made at this request) and should return a map describing if
+  and how the request may be retried, as described by the keys:
+  - `:retry?` - If `true`, the request will be retried
+  - `:delay` - A number of milliseconds to wait before trying again, optional.
+  - `:refresh` - A list of `:params` that should be fetched anew, bypassing the
+    cache, before trying this request again.
+- `:cache-fn` - A function that is called if the response is a success. It is
+  passed a map of `{:req :res}` and should return a map describing if and how
+  the response may be cached, as described by the keys:
+  - `:cache?` - If `true`, the response will be cached _if a ttl is specified_.
+  - `:expires-at` - An epoch millis at which the response expires from the cache.
 
 ## Changelog
 

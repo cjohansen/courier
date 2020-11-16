@@ -7,23 +7,25 @@
   (put [_ spec params res]))
 
 (defn fname [f]
-  (when-let [name (some-> f str (str/replace #"_" "-"))]
-    (let [name (-> (re-find #"(?:#')?(.*)" name)
-                   second
-                   (str/replace #"-QMARK-" "?"))]
-      #?(:clj
-         (if-let [[_ ns n] (re-find #"(.*)\$(.*)@" name)]
-           (keyword ns n)
-           (keyword name))
-         :cljs
-         (if-let [[_ res] (re-find #"function (.+)\(" name)]
-           (let [[f & ns ] (-> res (str/split #"\$") reverse)]
-             (keyword (str/join "." (reverse ns)) f))
-           (if (re-find #"function \(" name)
-             (keyword (str (random-uuid)))
-             (keyword (str/replace name #" " "-"))))))))
+  (if-let [meta-name (-> f meta :name)]
+    meta-name
+    (when-let [name (some-> f str (str/replace #"_" "-"))]
+      (let [name (-> (re-find #"(?:#')?(.*)" name)
+                     second
+                     (str/replace #"-QMARK-" "?"))]
+        #?(:clj
+           (if-let [[_ ns n] (re-find #"(.*)\$(.*)@" name)]
+             (keyword ns n)
+             (keyword name))
+           :cljs
+           (if-let [[_ res] (re-find #"function (.+)\(" name)]
+             (let [[f & ns ] (-> res (str/split #"\$") reverse)]
+               (keyword (str/join "." (reverse ns)) f))
+             (if (re-find #"function \(" name)
+               (keyword (str (random-uuid)))
+               (keyword (str/replace name #" " "-")))))))))
 
-(defn cache-id [{:courier.http/keys [id req-fn]}]
+(defn cache-id [{:keys [id req-fn]}]
   (or id
       (when req-fn (fname req-fn))
       :courier.http/req))
@@ -33,7 +35,7 @@
        (map (fn [[h v]] [(str/lower-case h) v]))
        (into {})))
 
-(defn get-cache-relevant-params [{:courier.http/keys [id req-fn req]} params]
+(defn get-cache-relevant-params [{:keys [id req-fn req]} params]
   (cond
     (or id req-fn) params
 
@@ -56,6 +58,7 @@
          {:cache-params params})))))
 
 (defn cache-key [spec params]
+  (prn [(cache-id spec) (get-cache-relevant-params spec params)])
   [(cache-id spec) (get-cache-relevant-params spec params)])
 
 (defn from-atom-map [ref]
@@ -75,13 +78,12 @@
       res)))
 
 (defn cacheable [result]
-  (let [{:courier.http/keys [cache-for cache-for-fn]} (:spec result)
-        ttl (or cache-for
-                (when (ifn? cache-for-fn) (cache-for-fn (:res result))))]
-    (cond-> (select-keys result [:req :res])
-      (number? ttl) (assoc :expires-at (time/add-millis (time/now) ttl))
-      :always (update :res dissoc :http-client)
-      :always (assoc :cached-at (time/millis (time/now))))))
+  (-> (select-keys result [:req :res])
+      (assoc :expires-at (-> result :cache :expires-at))
+      (update :res dissoc :http-client)
+      (assoc :cached-at (time/millis (time/now)))))
 
 (defn store [cache spec params res]
-  (put cache spec params (cacheable res)))
+  (let [cacheable-result (cacheable res)]
+    (put cache spec params cacheable-result)
+    cacheable-result))
