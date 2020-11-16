@@ -69,9 +69,8 @@ more low-level HTTP clients:
 
    :retry-fn (http/retry-fn {:retries 2}) ;; 3
 
-   :cache-fn (fn [{:keys [req res]}]
-               {:cache? true
-                :ttl (* 1000 (-> res :body :expires_in))})}) ;; 4
+   :cache-fn (http/cache-fn
+              {:ttl-fn #(* 1000 (-> % :res :body :expires_in))})}) ;; 4
 
 (def spotify-playlist-request
   {:params [:token :playlist-id]
