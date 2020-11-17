@@ -18,8 +18,8 @@ sure to retry failures and handle all the nitty-gritty intricacies of this
 interaction for you.
 
 Courier's caching and retry mechanisms do not expect all the HTTP endpoints in
-the world to be perfectly spec-compliant, and allows you to tune them to a
-priori information about the APIs you're working with.
+the world to be perfectly spec-compliant, and allows you to tune them to
+out of band information about the APIs you're working with.
 
 ## Hello, Courier
 
@@ -277,7 +277,6 @@ with information about all requests leading up to it. It contains the following
 keys:
 
 - `:success?` - A boolean
-- `:data` - The resulting data, if successful
 - `:log` - A list of maps describing each attempt
 - `:cache-status` - A map describing the cache status of the data (TODO)
 - `:status` - The response status of the last response
@@ -288,12 +287,10 @@ The `:log` list contains maps with the following keys:
 
 - `:req` - The request map
 - `:res` - The full response
-- `:retry-in` - The number of milliseconds to wait before retrying
-- `:retry-refresh` - A list of parameters to refresh before retrying
-- `:cache-ttl` - The number of milliseconds to cache this response
+- `:retry` - The result of the `:retry-fn`, if set
+- `:cache` - The result of the `:cache-fn`, if set
 
-`:retry-in`, `:retry-refresh`, and `:cache-ttl` are only available when
-relevant.
+`:retry` and `:cache` are only available when relevant.
 
 The `:cache-status` map contains the folowing keys:
 
@@ -414,7 +411,7 @@ the following two functions:
 ```clj
 (defprotocol Cache
   (lookup [_ spec params])
-  (set [_ spec params res]))
+  (put [_ spec params res]))
 ```
 
 `spec` is the full map passed to `courier.http/request`. `params` is a map of
@@ -463,10 +460,10 @@ use of the cache. Consider the playlist request from before:
    :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
-If the `:token` parameter is provided by another request, Courier might have to
-request a token only to find a cached version of the playlist in the cache. If
-the playlist is already cached, there is no need for a token. Constructing a
-cache key from the `:lookup-params` only, Courier will omit the token request if
+When the `:token` parameter is provided by another request, Courier might have
+to request a token only to find a cached version of the playlist in the cache.
+If the playlist is already cached, there is no need for a token. Constructing a
+cache key from the `:lookup-params` only, Courier will skip the token request if
 the playlist is cached:
 
 ```clj
@@ -578,43 +575,43 @@ channel that emits events as they occur:
 (require '[courier.http :as http]
          '[clojure.core.async :as a])
 
-(def [ch result]
-  (http/request-with-log
-   spotify-playlist-request
-   {:cache (courier-cache/from-atom-map cache)
-    :params {:client-id "my-api-client"
-             :client-secret "api-secret"
-             :playlist-id "3abdc"
-             :token {::http/req spotify-token-request
-                     ::http/select (comp :access_token :body)}}}))
+(let [[log-ch result-ch]
+      (http/request-with-log
+       spotify-playlist-request
+       {:cache (courier-cache/from-atom-map cache)
+        :params {:client-id "my-api-client"
+                 :client-secret "api-secret"
+                 :playlist-id "3abdc"
+                 :token {::http/req spotify-token-request
+                         ::http/select (comp :access_token :body)}}})]
 
-;; The result channel emits the full result, as returned by `request`:
-(a/go (a/<! result))
+  ;; The result channel emits the full result, as returned by `request`:
+  (a/go (a/<! result-ch))
 
-;; The events channel gives you realtime insight into the ongoing process:
-(a/go-loop []
-  (when-let [event (a/<! ch)]
-    (case (:event event)
-      ::http/request
-      (log/info "Request" (:req event))
+  ;; The events channel gives you realtime insight into the ongoing process:
+  (a/go-loop []
+    (when-let [event (a/<! log-ch)]
+      (case (:event event)
+        ::http/request
+        (log/info "Request" (:req event))
 
-      ::http/response
-      (log/info "Response"
-                (:method (:req event))
-                (:url (:req event))
-                (select-keys (:res event) [:status
-                                           :headers
-                                           :body
-                                           :request-time]))
+        ::http/response
+        (log/info "Response"
+                  (:method (:req event))
+                  (:url (:req event))
+                  (select-keys (:res event) [:status
+                                             :headers
+                                             :body
+                                             :request-time]))
 
-      ::http/cache-hit
-      (log/info "Cache hit" (select-keys event [:req :res]))
+        ::http/cache-hit
+        (log/info "Cache hit" (select-keys event [:req :res]))
 
-      ::http/exception
-      (log/error event)
+        ::http/exception
+        (log/error event)
 
-      ::http/failure
-      (log/error "Failed to complete request" event))))
+        ::http/failure
+        (log/error "Failed to complete request" event)))))
 ```
 
 ## Testing
