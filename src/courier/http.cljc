@@ -302,7 +302,6 @@
 (defn prepare-full-result-for [k events]
   (let [reqs (filter (comp #{::response ::cache-hit} :event) events)
         res (last (filter (comp #{k} :path) reqs))]
-    (prn res)
     (merge
      (select-keys (:res res) [:status :headers :body])
      {:success? (:success? res)

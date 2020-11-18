@@ -235,7 +235,6 @@
   (is (= (with-responses {[:post "http://example.com/security/"]
                           [{:status 200 :body {:token "ejY..."}}]}
            (->> {:example {:req-fn (fn [{:keys [token]}]
-                                     (prn "===>" token)
                                      {:url "http://example.com/"
                                       :headers {"Authorization" (str "Bearer " token)}})
                            :params [:token]}}

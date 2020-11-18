@@ -58,7 +58,6 @@
          {:cache-params params})))))
 
 (defn cache-key [spec params]
-  (prn [(cache-id spec) (get-cache-relevant-params spec params)])
   [(cache-id spec) (get-cache-relevant-params spec params)])
 
 (defn from-atom-map [ref]
