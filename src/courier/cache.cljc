@@ -1,6 +1,7 @@
 (ns courier.cache
   (:require [clojure.string :as str]
-            [courier.time :as time]))
+            [courier.time :as time]
+            [courier.fingerprint :as fingerprint]))
 
 (defprotocol Cache
   (lookup [_ spec params])
@@ -8,7 +9,7 @@
 
 (defn fname [f]
   (if-let [meta-name (-> f meta :name)]
-    meta-name
+    (keyword (some-> f meta :ns str) (str meta-name))
     (when-let [name (some-> f str (str/replace #"_" "-"))]
       (let [name (-> (re-find #"(?:#')?(.*)" name)
                      second
@@ -42,20 +43,21 @@
     :default
     (let [[url query-string] (str/split (:url req) #"\?")]
       (merge
-       {:method (:method req :get)
-        :url url}
+       {:method :get}
+       (select-keys req [:method :url :as :content-type :query-params])
        (when query-string
          {:query-params
           (->> (str/split query-string #"&")
                (map #(let [[k & args] (str/split % #"=")]
                        [(keyword k) (str/join args)]))
                (into {}))})
-       (let [params (cond-> (select-keys req [:headers :body])
-                      (:headers req) (update :headers normalize-headers))]
-         (when-not (empty? params)
-           params))
+       (when-let [headers (:headers req)]
+         {:headers (normalize-headers headers)})
+       (let [sensitive (select-keys req [:body :form-params :basic-auth])]
+         (when-not (empty? sensitive)
+           {:hash (fingerprint/fingerprint sensitive)}))
        (when-not (empty? params)
-         {:cache-params params})))))
+         {:lookup-params params})))))
 
 (defn cache-key [spec params]
   [(cache-id spec) (get-cache-relevant-params spec params)])
