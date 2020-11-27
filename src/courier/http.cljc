@@ -71,13 +71,13 @@
           nil)))))
 
 (defn fulfill-exchange [log exchange]
-  (try
-    (let [res (client/request (:req exchange))
-          res #?(:cljs (a/<! res)
-                 :clj res)]
-      (prepare-result log (assoc exchange :res res)))
-    (catch Exception e
-      (assoc exchange :exception e))))
+  (a/go
+   (try
+     (let [res (a/<! #?(:cljs (client/request (:req exchange))
+                        :clj (a/thread (client/request (:req exchange)))))]
+       (prepare-result log (assoc exchange :res res)))
+     (catch Exception e
+       (assoc exchange :exception e)))))
 
 (def validations
   {:retry {:retry? boolean?
@@ -128,7 +128,7 @@
                     :spec spec
                     :req req}]
       (emit log ::request exchange)
-      (let [result (fulfill-exchange log exchange)
+      (let [result (a/<! (fulfill-exchange log exchange))
             result (merge result
                           (when-let [retry (get-retry-info result log exchanges)]
                             {:retry retry})
