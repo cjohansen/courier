@@ -70,12 +70,17 @@
     (lookup [_ spec params]
       (get @ref (cache-key spec params)))
     (put [_ spec params res]
-      (swap! ref assoc (cache-key spec params) res))))
+      (let [k (cache-key spec params)]
+        (swap! ref assoc k res)
+        {::key k}))))
+
+(defn expired? [res]
+  (and (int? (:expires-at res))
+       (not (time/before? (time/now) (:expires-at res)))))
 
 (defn retrieve [cache spec params]
   (when-let [res (lookup cache spec params)]
-    (when (or (not (int? (:expires-at res)))
-              (time/before? (time/now) (:expires-at res)))
+    (when (not (expired? res))
       res)))
 
 (defn cacheable [result]
