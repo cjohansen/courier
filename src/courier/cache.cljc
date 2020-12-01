@@ -37,10 +37,8 @@
        (into {})))
 
 (defn get-cache-relevant-params [{:keys [id req-fn req]} params]
-  (cond
-    (or id req-fn) params
-
-    :default
+  (if (or id req-fn)
+    params
     (let [[url query-string] (str/split (:url req) #"\?")]
       (merge
        {:method :get}
