@@ -1,5 +1,6 @@
 (ns courier.cache
   (:require [clojure.string :as str]
+            [courier.fs :as fs]
             [courier.time :as time]
             [courier.fingerprint :as fingerprint]))
 
@@ -91,3 +92,42 @@
       (let [k (cache-key spec params)]
         (swap! ref assoc k res)
         {::key k}))))
+
+(defn str-id [spec]
+  (let [id (cache-id spec)]
+    (str (namespace id) "." (name id))))
+
+(defn filename [dir spec params]
+  (let [fingerprinted-name (fingerprint/fingerprint (get-cache-relevant-params spec params))
+        [_ prefix postfix] (re-find #"(..)(.+)" fingerprinted-name)
+        dirname (str dir "/" (str-id spec) "/" prefix)]
+    (str dirname "/" postfix ".edn")))
+
+(defn slurp-edn [file]
+  (try
+    (let [content (fs/read-file file)]
+      (if-not (empty? content)
+        #?(:clj (read-string content)
+           :cljs (cljs.reader/read-string content))
+        nil))
+    (catch #?(:clj Throwable
+              :cljs :default) e
+      nil)))
+
+(defn create-file-cache [{:keys [dir]}]
+  (assert (string? dir) "Can't create file cache without directory")
+  (fs/ensure-dir dir)
+  (reify Cache
+    (lookup [_ spec params]
+      (when-let [file (filename dir spec params)]
+        (when-let [val (slurp-edn file)]
+          (if (expired? val)
+            (do
+              (fs/delete-file file)
+              nil)
+            val))))
+    (put [_ spec params res]
+      (when-let [file (filename dir spec params)]
+        (fs/ensure-dir (fs/dirname file))
+        (fs/write-file file (pr-str (assoc res ::file-name file)))
+        {::file-name file}))))
