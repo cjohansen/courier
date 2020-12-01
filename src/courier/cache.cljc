@@ -60,7 +60,7 @@
 (defn cache-key [spec params]
   [(cache-id spec) (get-cache-relevant-params spec params)])
 
-(defn from-atom-map [ref]
+(defn create-atom-map-cache [ref]
   (assert (instance? clojure.lang.Atom ref)
           (format "ref must be an atom, was %s" (type ref)))
   (assert (or (map? @ref) (nil? @ref)) "ref must contain nil or a map")

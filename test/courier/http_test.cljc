@@ -262,7 +262,7 @@
                              :res {:status 200
                                    :body "Oh yeah!"}}})]
            (->> {:example {:req {:url "http://example.com/"}}}
-                (sut/make-requests {:cache (cache/from-atom-map cache)})
+                (sut/make-requests {:cache (cache/create-atom-map-cache cache)})
                 sut/collect!!))
          [{:req {:method :get
                  :url "http://example.com"}
@@ -281,7 +281,7 @@
                                    :body "Oh yeah!"}
                              :expires-at (time/add-millis (time/now) -10)}})]
            (->> {:example {:req {:url "http://example.com/"}}}
-                (sut/make-requests {:cache (cache/from-atom-map cache)})
+                (sut/make-requests {:cache (cache/create-atom-map-cache cache)})
                 sut/collect!!
                 (map summarize-event)))
          [[::sut/request :example [:get "http://example.com/"]]
@@ -302,7 +302,7 @@
                                       :headers {"Authorization" (str "Bearer " token)}})
                            :params [:token]}}
                 (sut/make-requests
-                 {:cache (cache/from-atom-map cache)
+                 {:cache (cache/create-atom-map-cache cache)
                   :params
                   {:token {::sut/req {:req {:method :post
                                             :url "http://example.com/security/"}}
@@ -333,7 +333,7 @@
                            :params [:id :config :token]
                            :lookup-params [[:config :host] :id]}}
                 (sut/make-requests
-                 {:cache (cache/from-atom-map cache)
+                 {:cache (cache/create-atom-map-cache cache)
                   :params
                   {:token {::sut/req {:req {:method :post
                                             :url "http://example.com/security/"}}
@@ -354,7 +354,7 @@
            (->> {:example {:id :example
                            :req-fn (fn [params]
                                      {:url (str "http://example.com/42")})}}
-                (sut/make-requests {:cache (cache/from-atom-map cache)})
+                (sut/make-requests {:cache (cache/create-atom-map-cache cache)})
                 sut/collect!!
                 (map summarize-event)))
          [[:courier.http/cache-hit :example [200 "I'm cached!"]]])))
@@ -372,7 +372,7 @@
                            :params [:id :token]
                            :lookup-params [:id]}}
                 (sut/make-requests
-                 {:cache (cache/from-atom-map cache)
+                 {:cache (cache/create-atom-map-cache cache)
                   :params
                   {:token {:req {:method :post
                                  :url "http://example.com/security/"}}
@@ -385,7 +385,7 @@
   (is (= (with-responses {[:get "https://example.com/"]
                           [{:status 200
                             :body {:content "Skontent"}}]}
-           (let [cache (cache/from-atom-map (atom {}))
+           (let [cache (cache/create-atom-map-cache (atom {}))
                  spec {:example {:req {:url "https://example.com/"}
                                  :cache-fn (sut/cache-fn {:ttl 100})}}]
              (concat
@@ -407,7 +407,7 @@
            (let [cache (atom {})]
              (sut/request
               {:req {:url "https://example.com/"}}
-              {:cache (cache/from-atom-map cache)})
+              {:cache (cache/create-atom-map-cache cache)})
              @cache))
          {})))
 
@@ -420,7 +420,7 @@
               {:req {:url "https://example.com/"}
                :cache-fn (sut/cache-fn {:cacheable? (constantly false)
                                         :ttl 100})}
-              {:cache (cache/from-atom-map cache)})
+              {:cache (cache/create-atom-map-cache cache)})
              @cache))
          {})))
 
@@ -428,7 +428,7 @@
   (is (= (with-responses {[:get "https://example.com/"]
                           [{:status 200
                             :body {:content "Skontent"}}]}
-           (let [cache (cache/from-atom-map (atom {}))
+           (let [cache (cache/create-atom-map-cache (atom {}))
                  spec {:id ::example
                        :cache-fn (sut/cache-fn {:ttl 100})
                        :req-fn (fn [params]
@@ -456,7 +456,7 @@
               (let [cache (atom {})]
                 (->> {:example {:req {:url "https://example.com/"}
                                 :cache-fn (sut/cache-fn {:ttl (* 60 60 1000)})}}
-                     (sut/make-requests {:cache (cache/from-atom-map cache)})
+                     (sut/make-requests {:cache (cache/create-atom-map-cache cache)})
                      sut/collect!!)
                 (- (-> @cache first second :expires-at time/millis) (time/millis now)))))
           3600010)))
@@ -470,7 +470,7 @@
               (let [cache (atom {})]
                 (->> {:example {:req {:url "https://example.com/"}
                                 :cache-fn (sut/cache-fn {:ttl-fn #(-> % :res :body :ttl)})}}
-                     (sut/make-requests {:cache (cache/from-atom-map cache)})
+                     (sut/make-requests {:cache (cache/create-atom-map-cache cache)})
                      sut/collect!!)
                 (- (-> @cache first second :expires-at time/millis) (time/millis now)))))
           120)))
@@ -481,7 +481,7 @@
                             :body {}}]}
            (->> {:example {:req {:url "https://example.com/"}
                            :cache-fn (sut/cache-fn {:ttl-fn (fn [_] (throw (ex-info "Boom!" {})))})}}
-                (sut/make-requests {:cache (cache/from-atom-map (atom {}))})
+                (sut/make-requests {:cache (cache/create-atom-map-cache (atom {}))})
                 sut/collect!!
                 (map summarize-event)))
          [[:courier.http/request :example [:get "https://example.com/"]]
@@ -494,7 +494,7 @@
                             :body {}}]}
            (->> {:example {:req {:url "https://example.com/"}
                            :cache-fn (sut/cache-fn {:cacheable? (fn [_] (throw (ex-info "Boom!" {})))})}}
-                (sut/make-requests {:cache (cache/from-atom-map (atom {}))})
+                (sut/make-requests {:cache (cache/create-atom-map-cache (atom {}))})
                 sut/collect!!
                 (map summarize-event)))
          [[:courier.http/request :example [:get "https://example.com/"]]
@@ -510,7 +510,7 @@
              (sut/request
               {:req {:url "https://example.com/"}
                :cache-fn (sut/cache-fn {:ttl 100})}
-              {:cache (cache/from-atom-map cache)})
+              {:cache (cache/create-atom-map-cache cache)})
              (some-> @cache first second :res (select-keys [:http-client]))))
          {})))
 
@@ -519,7 +519,7 @@
         (with-responses {[:get "https://example.com/"]
                          [{:status 200
                            :body {:ttl 100}}]}
-          (let [cache (cache/from-atom-map (atom {}))
+          (let [cache (cache/create-atom-map-cache (atom {}))
                 spec {:req {:url "https://example.com/"}
                       :cache-fn (sut/cache-fn {:ttl-fn #(-> % :res :body :ttl)})}]
             (-> (sut/request spec {:cache cache})
@@ -535,7 +535,7 @@
         (with-responses {[:get "https://example.com/"]
                          [{:status 200
                            :body {:ttl 100}}]}
-          (let [cache (cache/from-atom-map (atom {}))
+          (let [cache (cache/create-atom-map-cache (atom {}))
                 spec {:req {:url "https://example.com/"}
                       :cache-fn (sut/cache-fn {:ttl-fn #(-> % :res :body :ttl)})}]
             (sut/request spec {:cache cache})
@@ -568,7 +568,7 @@
                              :retry-fn (sut/retry-fn {:retries 1
                                                       :refresh [:token]})}}
                   (sut/make-requests
-                   {:cache (cache/from-atom-map cache)
+                   {:cache (cache/create-atom-map-cache cache)
                     :params
                     {:token {::sut/req {:req {:method :post
                                               :url "https://example.com/security/"}}

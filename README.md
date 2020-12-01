@@ -93,7 +93,7 @@ more low-level HTTP clients:
 
 (http/request ;; 9
  spotify-playlist-request
- {:cache (courier-cache/from-atom-map cache) ;; 10
+ {:cache (courier-cache/create-atom-map-cache cache) ;; 10
   :params {:client-id "my-api-client" ;; 11
            :client-secret "api-secret"
            :playlist-id "3abdc"
@@ -440,7 +440,7 @@ A reified instance of a cache can be passed to `http/request` as `:cache`:
 
 (http/request
  spotify-playlist-request
- {:cache (courier-cache/from-atom-map cache)
+ {:cache (courier-cache/create-atom-map-cache cache)
   :params {:client-id "my-api-client"
            :client-secret "api-secret"
            :playlist-id "3abdc"
@@ -582,7 +582,7 @@ channel that emits events as they occur:
 (let [[log-ch result-ch]
       (http/request-with-log
        spotify-playlist-request
-       {:cache (courier-cache/from-atom-map cache)
+       {:cache (courier-cache/create-atom-map-cache cache)
         :params {:client-id "my-api-client"
                  :client-secret "api-secret"
                  :playlist-id "3abdc"
