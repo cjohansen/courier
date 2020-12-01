@@ -28,10 +28,10 @@
 (defn time-events!! [ch]
   (a/<!!
    (a/go-loop [res []]
-     (let [start (sut/now)]
+     (let [start (time/millis (time/now))]
        (if-let [event (a/<! ch)]
          (recur (conj res {:event (:event event)
-                           :elapsed (- (sut/now) start)}))
+                           :elapsed (- (time/millis (time/now)) start)}))
          res)))))
 
 (defn summarize-req [{:keys [method url headers body]}]
@@ -397,7 +397,7 @@
                    (map summarize-event)))))
          [[::sut/request :example [:get "https://example.com/"]]
           [::sut/response :example [200 {:content "Skontent"}]]
-          [::sut/cache-response [200 {:content "Skontent"}]]
+          [::sut/store-in-cache :example [200 {:content "Skontent"}]]
           [::sut/cache-hit :example [200 {:content "Skontent"}]]])))
 
 (deftest does-not-cache-successful-result-with-no-ttl
@@ -444,7 +444,7 @@
                    (map summarize-event)))))
          [[::sut/request :example [:get "https://example.com/"]]
           [::sut/response :example [200 {:content "Skontent"}]]
-          [::sut/cache-response [200 {:content "Skontent"}]]
+          [::sut/store-in-cache :example [200 {:content "Skontent"}]]
           [::sut/cache-hit :example [200 {:content "Skontent"}]]])))
 
 (deftest caches-result-with-expiry
@@ -485,7 +485,7 @@
                 sut/collect!!
                 (map summarize-event)))
          [[:courier.http/request :example [:get "https://example.com/"]]
-          [:courier.http/exception "Boom!" "cache-fn"]
+          [:courier.http/exception "Boom!" :cache-fn]
           [:courier.http/response :example [200 {}]]])))
 
 (deftest does-not-cache-if-cacheable-fn-throws
@@ -498,7 +498,7 @@
                 sut/collect!!
                 (map summarize-event)))
          [[:courier.http/request :example [:get "https://example.com/"]]
-          [:courier.http/exception "Boom!" "cache-fn"]
+          [:courier.http/exception "Boom!" :cache-fn]
           [:courier.http/response :example [200 {}]]])))
 
 (deftest does-not-cache-the-http-client-on-the-response
@@ -514,6 +514,22 @@
              (some-> @cache first second :res (select-keys [:http-client]))))
          {})))
 
+(deftest includes-cache-info-on-store
+  (let [cache-status
+        (with-responses {[:get "https://example.com/"]
+                         [{:status 200
+                           :body {:ttl 100}}]}
+          (let [cache (cache/from-atom-map (atom {}))
+                spec {:req {:url "https://example.com/"}
+                      :cache-fn (sut/cache-fn {:ttl-fn #(-> % :res :body :ttl)})}]
+            (-> (sut/request spec {:cache cache})
+                :cache-status)))]
+    (is (true? (:stored-in-cache? cache-status)))
+    (is (number? (:cached-at cache-status)))
+    (is (number? (:expires-at cache-status)))
+    (is (= (::cache/key cache-status)
+           [::sut/req {:method :get :url "https://example.com/"}]))))
+
 (deftest includes-cache-info-on-retrieve
   (let [cache-status
         (with-responses {[:get "https://example.com/"]
@@ -525,7 +541,7 @@
             (sut/request spec {:cache cache})
             (-> (sut/request spec {:cache cache})
                 :cache-status)))]
-    (is (true? (:cached? cache-status)))
+    (is (true? (:cache-hit? cache-status)))
     (is (number? (:cached-at cache-status)))
     (is (number? (:expires-at cache-status)))))
 

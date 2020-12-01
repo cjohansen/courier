@@ -278,7 +278,7 @@ keys:
 
 - `:success?` - A boolean
 - `:log` - A list of maps describing each attempt
-- `:cache-status` - A map describing the cache status of the data (TODO)
+- `:cache-status` - A map describing the cache status of the data
 - `:status` - The response status of the last response
 - `:headers` - The headers on the last response
 - `:body` - The body of the last response
@@ -294,10 +294,14 @@ The `:log` list contains maps with the following keys:
 
 The `:cache-status` map contains the folowing keys:
 
-- `:cached?` - A boolean
+- `:cache-hit?` - A boolean, `true` if the result was pulled from the cache
+- `:stored-in-cache?` - A boolean, `true` if the result was stored in the cache
 - `:cached-at` - A timestamp (epoch milliseconds) when the object was cached
 - `:expires-at` - A timestamp (epoch milliseconds) when the object expires from
   the cache.
+
+Specific cache implementations may add additional keys in this map, with further
+details about the cache entry, see individual implementations.
 
 ## Retry on failure
 
@@ -603,6 +607,9 @@ channel that emits events as they occur:
                                              :headers
                                              :body
                                              :request-time]))
+
+        ::http/store-in-cache
+        (log/info "Cache response" (select-keys event [:req :res]))
 
         ::http/cache-hit
         (log/info "Cache hit" (select-keys event [:req :res]))

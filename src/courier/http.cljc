@@ -64,7 +64,7 @@
     (let [params (:params (lookup-params spec ctx))]
       (try
         (->> (cache/store cache spec params result)
-             (emit log ::cache-response))
+             (emit log ::store-in-cache))
         (catch Exception e
           (emit log ::exception {:throwable e
                                  :source "courier.cache/put"})
