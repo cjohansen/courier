@@ -131,3 +131,39 @@
         (fs/ensure-dir (fs/dirname file))
         (fs/write-file file (pr-str (assoc res ::file-name file)))
         {::file-name file}))))
+
+(def ^:private carmine-available?
+  "Carmine/Redis is an optional dependency, so we try to load it runtime. If the
+  dependency is available, the redis cache can be used."
+  (try
+    (require 'taoensso.carmine)
+    true
+    (catch Throwable _ false)))
+
+(defmacro wcar [& body]
+  (when carmine-available?
+    `(taoensso.carmine/wcar ~@body)))
+
+(defn- redis-f [f & args]
+  (apply (ns-resolve (symbol "taoensso.carmine") (symbol (name f))) args))
+
+(defn- redis-cache-key [spec params]
+  (let [id (cache-id spec)
+        params (get-cache-relevant-params spec params)]
+    (->> [(namespace id)
+          (name id)
+          (fingerprint/fingerprint params)]
+         (remove empty?)
+         (str/join "/"))))
+
+(defn create-redis-cache [conn-opts]
+  (assert carmine-available? "com.taoensso/carmine needs to be on the classpath")
+  (assert (not (nil? conn-opts)) "Please provide connection options")
+  (reify Cache
+    (lookup [_ spec params]
+      (wcar conn-opts (redis-f :get (redis-cache-key spec params))))
+    (put [_ spec params res]
+      (let [ttl (- (time/millis (:expires-at res)) (time/millis (time/now)))
+            cache-key (redis-cache-key spec params)]
+        (wcar conn-opts (redis-f :psetex cache-key ttl (assoc res ::key cache-key)))
+        {::key cache-key}))))

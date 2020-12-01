@@ -6,6 +6,7 @@
  :aliases {:dev {:extra-paths ["test"]
                  :extra-deps {org.clojure/tools.namespace {:mvn/version "0.3.0-alpha4"}
                               org.clojure/test.check {:mvn/version "0.10.0-alpha4"}
+                              com.taoensso/carmine {:mvn/version "3.1.0"}
                               cheshire/cheshire {:mvn/version "5.10.0"}
                               lambdaisland/kaocha {:mvn/version "1.0.700"}
                               kaocha-noyoda/kaocha-noyoda {:mvn/version "2019-06-03"}}}
