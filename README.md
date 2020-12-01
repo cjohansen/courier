@@ -561,6 +561,89 @@ Which will result in the following cache key for the atom map caches:
     :playlist-id "3b5045a0-05fc-4d7f-8b61-9c6d37ab90e6"}])
 ```
 
+### Atom map cache
+
+The atom map cache gives you a quick and easy in-memory cache for your HTTP
+requests. Stick a map, or a map-like data structure, in an atom, and off you go.
+[clojure.core.cache](https://github.com/clojure/core.cache) has lots of nice
+caches that go well with this Courier cache:
+
+```clj
+(require '[courier.http :as http]
+         '[courier.cache :refer [create-atom-map-cache]]
+         '[clojure.core.cache :as cache])
+
+(def cache (atom (cache/lru-cache-factory {} :threshold 8192)))
+
+(http/request
+ spotify-playlist-request
+ {:cache (create-atom-map-cache cache)
+  :params {:client-id "my-api-client"
+           :client-secret "api-secret"
+           :playlist-id "3abdc"
+           :token {::http/req spotify-token-request
+                   ::http/select (comp :access_token :body)}}})
+```
+
+The atom map cache adds a `:courier.cache/cache-key` to the `:cache-status` map,
+indicating the key under which the result is stored in the cache.
+
+### File cache
+
+The file cache stores responses on disk. Give it a directory, and off you go.
+
+```clj
+(require '[courier.http :as http]
+         '[courier.cache :as cache])
+
+(http/request
+ spotify-playlist-request
+ {:cache (cache/create-file-cache {:dir "/tmp/courier"})
+  :params {:client-id "my-api-client"
+           :client-secret "api-secret"
+           :playlist-id "3abdc"
+           :token {::http/req spotify-token-request
+                   ::http/select (comp :access_token :body)}}})
+```
+
+The file cache adds a `:courier.cache/file-name` key to the `:cache-status` map,
+containing the full path on disk to the file storing the cached response.
+Cache files are stored in files with UUID names, sharded by the first two
+characters, to avoid too many files in a single directory.
+
+### Redis cache
+
+To cache Courier responses in Redis you must "bring your own"
+[Carmine](https://github.com/ptaoussanis/carmine):
+
+```clj
+com.taoensso/carmine {:mvn/version "3.1.0"}
+```
+
+Then create a cache with a pool spec:
+
+```clj
+(require '[courier.http :as http]
+         '[courier.cache :as cache]
+         '[taoensso.carmine.connections :as cc])
+
+(def pool-spec
+  (let [conn-spec {:spec {:uri "redis://localhost"}}
+        [pool conn] (cc/pooled-conn conn-spec)
+        pool-spec (assoc conn-spec :pool pool)]
+    (.release-conn pool conn)
+    pool-spec))
+
+(http/request
+ spotify-playlist-request
+ {:cache (cache/create-redis-cache pool-spec)
+  :params {:client-id "my-api-client"
+           :client-secret "api-secret"
+           :playlist-id "3abdc"
+           :token {::http/req spotify-token-request
+                   ::http/select (comp :access_token :body)}}})
+```
+
 ## Events
 
 Even though `(courier.http/request spec)` looks like a single request, it can
