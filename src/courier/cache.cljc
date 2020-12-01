@@ -88,6 +88,6 @@
       (assoc :cached-at (time/millis (time/now)))))
 
 (defn store [cache spec params res]
-  (let [cacheable-result (cacheable res)]
-    (put cache spec params cacheable-result)
-    cacheable-result))
+  (let [cacheable-result (cacheable res)
+        cache-data (put cache spec params cacheable-result)]
+    (assoc cacheable-result :path (:path res) :cache-status cache-data)))

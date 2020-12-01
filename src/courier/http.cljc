@@ -300,19 +300,24 @@
   (dissoc e :event :path))
 
 (defn prepare-full-result-for [k events]
-  (let [reqs (filter (comp #{::response ::cache-hit} :event) events)
-        res (last (filter (comp #{k} :path) reqs))]
+  (let [reqs (filter (comp #{::response ::cache-hit ::store-in-cache} :event) events)
+        res (last (filter (comp #{k} :path) reqs))
+        cache-status (merge
+                      (:cache-status res)
+                      (select-keys res [:cached-at :expires-at])
+                      (->> (keys res)
+                           (filter (comp #{"courier.cache"} namespace))
+                           (select-keys res)))]
     (merge
      (select-keys (:res res) [:status :headers :body])
      {:success? (:success? res)
       :log (->> reqs
-                (remove (comp #{::cache-hit} :event))
+                (remove (comp #{::cache-hit ::store-in-cache} :event))
                 (map strip-event))}
      (when (= ::cache-hit (:event res))
-       {:cache-status
-        {:cached? true
-         :cached-at (:cached-at res)
-         :expires-at (:expires-at res)}})
+       {:cache-status (assoc cache-status :cache-hit? true)})
+     (when (= ::store-in-cache (:event res))
+       {:cache-status (assoc cache-status :stored-in-cache? true)})
      (when-let [exceptions (seq (filter (comp #{::exception} :event) events))]
        {:exceptions (map strip-event exceptions)}))))
 
@@ -350,5 +355,7 @@
         cacheable? (:cacheable? opt cacheable?)]
     (fn [{:keys [res] :as exchange}]
       (when (and (cacheable? exchange) ttl-fn)
-        {:cache? true
-         :expires-at (time/add-millis (time/now) (ttl-fn exchange))}))))
+        (let [ttl (ttl-fn exchange)]
+          {:cache? true
+           :expires-at (time/add-millis (time/now) ttl)
+           :ttl ttl})))))
