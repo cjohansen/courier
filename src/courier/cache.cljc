@@ -60,18 +60,6 @@
 (defn cache-key [spec params]
   [(cache-id spec) (get-cache-relevant-params spec params)])
 
-(defn create-atom-map-cache [ref]
-  (assert (instance? clojure.lang.Atom ref)
-          (format "ref must be an atom, was %s" (type ref)))
-  (assert (or (map? @ref) (nil? @ref)) "ref must contain nil or a map")
-  (reify Cache
-    (lookup [_ spec params]
-      (get @ref (cache-key spec params)))
-    (put [_ spec params res]
-      (let [k (cache-key spec params)]
-        (swap! ref assoc k res)
-        {::key k}))))
-
 (defn expired? [res]
   (and (int? (:expires-at res))
        (not (time/before? (time/now) (:expires-at res)))))
@@ -91,3 +79,15 @@
   (let [cacheable-result (cacheable res)
         cache-data (put cache spec params cacheable-result)]
     (assoc cacheable-result :path (:path res) :cache-status cache-data)))
+
+(defn create-atom-map-cache [ref]
+  (assert (instance? clojure.lang.Atom ref)
+          (format "ref must be an atom, was %s" (type ref)))
+  (assert (or (map? @ref) (nil? @ref)) "ref must contain nil or a map")
+  (reify Cache
+    (lookup [_ spec params]
+      (get @ref (cache-key spec params)))
+    (put [_ spec params res]
+      (let [k (cache-key spec params)]
+        (swap! ref assoc k res)
+        {::key k}))))
