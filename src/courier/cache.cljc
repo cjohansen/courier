@@ -71,7 +71,7 @@
       res)))
 
 (defn cacheable [result]
-  (-> (select-keys result [:req :res])
+  (-> (select-keys result [:req :res :success?])
       (assoc :expires-at (-> result :cache :expires-at))
       (update :res dissoc :http-client)
       (assoc :cached-at (time/millis (time/now)))))

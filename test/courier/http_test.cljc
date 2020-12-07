@@ -612,6 +612,14 @@
                                   :success? #(= 201 (:status %))})
                     :success?)))))
 
+(deftest communicates-success-on-cached-success
+  (is (true? (-> (sut/request
+                  {:cache-fn (sut/cache-fn {:ttl (* 5 60 1000)})
+                   :req {:method :get
+                         :url "http://example.com"}}
+                  {:cache (cache/create-atom-map-cache (atom {}))})
+                 :success?))))
+
 (deftest includes-request-log
   (is (= (with-responses {[:get "http://example.com/"]
                           [{:status 200
