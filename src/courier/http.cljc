@@ -308,7 +308,6 @@
                       (->> (keys res)
                            (filter (comp #{"courier.cache"} namespace))
                            (select-keys res)))]
-    (prn res)
     (merge
      (select-keys (:res res) [:status :headers :body])
      {:success? (boolean (:success? res))
