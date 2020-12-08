@@ -485,7 +485,7 @@ the playlist is cached:
 With `:lookup-params` in place, `courier.cache/lookup` won't receive the full
 request, only the spec and the cache parameters (the playlist ID). The `:req-fn`
 can be used to identify the request, but it usually won't do so in a
-human-friendly manner. A better approach is to include `:id` in the spec.
+human-friendly manner. A better approach is to include `:id` in the cache spec.
 `courier.cache/cache-key` can use this to construct a short, human-friendly
 cache key:
 
@@ -493,7 +493,7 @@ cache key:
 (def spotify-playlist-request
   {:id :spotify-playlist-request
    :params [:token :playlist-id]
-   :cache-params [:playlist-id]
+   :lookup-params [:playlist-id]
    :req-fn (fn [{:keys [token playlist-id]}]
              {:method :get
               :url (format "https://api.spotify.com/playlists/%s"
