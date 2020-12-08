@@ -758,3 +758,16 @@
   (let [result (sut/request {:req {:url "https://explosives.com"}})]
     (is (not (:success? result)))
     (is (seq (:exceptions result)))))
+
+(deftest informs-user-of-probable-misuse
+  (is (= (sut/request
+          {:params [:id]
+           :req-fn (fn [{:keys [id]}]
+                     {:url (str "http://example.com/" id)})}
+          {:id 42})
+         {:success? false
+          :log [{:courier.error/reason :courier.error/missing-params
+                 :courier.error/data [:id]}]
+          :hint (str "Make sure you pass parameters to your request as "
+                     "`:params` in the options map, not directly in the map, "
+                     "e.g.: {:params {:id 42}}, not {:id 42}")})))

@@ -299,8 +299,8 @@
 (defn strip-event [e]
   (dissoc e :event :path))
 
-(defn prepare-full-result-for [k events]
-  (let [reqs (filter (comp #{::response ::cache-hit ::store-in-cache} :event) events)
+(defn prepare-full-result-for [k opt events]
+  (let [reqs (filter (comp #{::response ::cache-hit ::store-in-cache ::failed} :event) events)
         res (last (filter (comp #{k} :path) reqs))
         cache-status (merge
                       (:cache-status res)
@@ -308,9 +308,10 @@
                       (->> (keys res)
                            (filter (comp #{"courier.cache"} namespace))
                            (select-keys res)))]
+    (prn res)
     (merge
      (select-keys (:res res) [:status :headers :body])
-     {:success? (:success? res)
+     {:success? (boolean (:success? res))
       :log (->> reqs
                 (remove (comp #{::cache-hit ::store-in-cache} :event))
                 (map strip-event))}
@@ -319,20 +320,27 @@
      (when (= ::store-in-cache (:event res))
        {:cache-status (assoc cache-status :stored-in-cache? true)})
      (when-let [exceptions (seq (filter (comp #{::exception} :event) events))]
-       {:exceptions (map strip-event exceptions)}))))
+       {:exceptions (map strip-event exceptions)})
+     (when (and (= ::failed (:event res))
+                (= :courier.error/missing-params (:courier.error/reason res)))
+       (when-let [possibly-misplaced (some (set (keys opt)) (:courier.error/data res))]
+         {:hint (str "Make sure you pass parameters to your request as `:params` "
+                     "in the options map, not directly in the map, e.g.: "
+                     "{:params {" possibly-misplaced " " (get opt possibly-misplaced) "}}, not "
+                     "{" possibly-misplaced " " (get opt possibly-misplaced) "}")})))))
 
 (defn request [spec & [opt]]
   (->> {::req spec}
        (make-requests opt)
        collect!!
-       (prepare-full-result-for ::req)))
+       (prepare-full-result-for ::req opt)))
 
 (defn request-with-log [spec & [opt]]
   (let [ch (a/chan 512)]
     [ch
      (a/go
        (->> (siphon!! (make-requests opt {::req spec}) ch)
-            (prepare-full-result-for ::req)))]))
+            (prepare-full-result-for ::req opt)))]))
 
 (defn retry-fn [{:keys [delays refresh refresh-fn] :as opt}]
   (let [retryable? (:retryable? opt retryable?)
