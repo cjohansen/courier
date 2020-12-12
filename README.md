@@ -485,15 +485,15 @@ the playlist is cached:
 With `:lookup-params` in place, `courier.cache/lookup` won't receive the full
 request, only the spec and the cache parameters (the playlist ID). The `:req-fn`
 can be used to identify the request, but it usually won't do so in a
-human-friendly manner. A better approach is to include `:id` in the cache spec.
-`courier.cache/cache-key` can use this to construct a short, human-friendly
-cache key:
+human-friendly manner. A better approach is to include `:lookup-id` in the cache
+spec. `courier.cache/cache-key` can use this to construct a short,
+human-friendly cache key:
 
 ```clj
 (def spotify-playlist-request
-  {:id :spotify-playlist-request
-   :params [:token :playlist-id]
+  {:params [:token :playlist-id]
    :lookup-params [:playlist-id]
+   :lookup-id :spotify-playlist-request
    :req-fn (fn [{:keys [token playlist-id]}]
              {:method :get
               :url (format "https://api.spotify.com/playlists/%s"
@@ -524,7 +524,7 @@ Let's parameterize the Spotify API host using a configuration map:
 
 ```clj
 (def spotify-playlist-request
-  {:id :spotify-playlist-request
+  {:lookup-id :spotify-playlist-request
    :params [:token :config :playlist-id]
    :req-fn (fn [{:keys [token config playlist-id]}]
              {:method :get
@@ -540,7 +540,7 @@ In order to include only the relevant key in the cache key,
 
 ```clj
 (def spotify-playlist-request
-  {:id :spotify-playlist-request
+  {:lookup-id :spotify-playlist-request
    :params [:token :config :playlist-id]
    :lookup-params [[:config :spotify-host] :playlist-id]
    :req-fn (fn [{:keys [token config playlist-id]}]

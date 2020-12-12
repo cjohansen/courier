@@ -296,7 +296,7 @@
                                    :url "http://example.com/security/"}
                              :res {:status 200
                                    :body {:token "T0k3n"}}}})]
-           (->> {:example {:id :example
+           (->> {:example {:lookup-id :example
                            :req-fn (fn [{:keys [id token]}]
                                      {:url (str "http://example.com/" id)
                                       :headers {"Authorization" (str "Bearer " token)}})
@@ -326,7 +326,7 @@
                                    :url "http://example.com/42"}
                              :res {:status 200
                                    :body "I'm cached!"}}})]
-           (->> {:example {:id :example
+           (->> {:example {:lookup-id :example
                            :req-fn (fn [{:keys [id token config]}]
                                      {:url (str "http://" (:host config) "/" id)
                                       :headers {"Authorization" (str "Bearer " token)}})
@@ -351,7 +351,7 @@
                                    :url "http://example.com/42"}
                              :res {:status 200
                                    :body "I'm cached!"}}})]
-           (->> {:example {:id :example
+           (->> {:example {:lookup-id :example
                            :req-fn (fn [params]
                                      {:url (str "http://example.com/42")})}}
                 (sut/make-requests {:cache (cache/create-atom-map-cache cache)})
@@ -365,7 +365,7 @@
                                    :url "http://example.com/42"}
                              :res {:status 200
                                    :body "I'm cached!"}}})]
-           (->> {:example {:id :example
+           (->> {:example {:lookup-id :example
                            :req-fn (fn [{:keys [id token]}]
                                      {:url (str "http://example.com/" id)
                                       :headers {"Authorization" (str "Bearer " token)}})
@@ -429,7 +429,7 @@
                           [{:status 200
                             :body {:content "Skontent"}}]}
            (let [cache (cache/create-atom-map-cache (atom {}))
-                 spec {:id ::example
+                 spec {:lookup-id ::example
                        :cache-fn (sut/cache-fn {:ttl 100})
                        :req-fn (fn [params]
                                  {:url "https://example.com/"})}]

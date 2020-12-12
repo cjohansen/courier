@@ -27,8 +27,8 @@
                (keyword (str (random-uuid)))
                (keyword (str/replace name #" " "-")))))))))
 
-(defn cache-id [{:keys [id req-fn]}]
-  (or id
+(defn cache-id [{:keys [lookup-id req-fn]}]
+  (or lookup-id
       (when req-fn (fname req-fn))
       :courier.http/req))
 
@@ -37,8 +37,8 @@
        (map (fn [[h v]] [(str/lower-case h) v]))
        (into {})))
 
-(defn get-cache-relevant-params [{:keys [id req-fn req]} params]
-  (if (or id req-fn)
+(defn get-cache-relevant-params [{:keys [lookup-id req-fn req]} params]
+  (if (or lookup-id req-fn)
     params
     (let [[url query-string] (str/split (:url req) #"\?")]
       (merge
