@@ -759,9 +759,10 @@ testing purposes:
 
 ## Changelog
 
-### 2020.11.xx
+### 2020.12.12
 
-Initial release
+Initial release to Clojars (after being battle-tested in production as a git
+dependency).
 
 ## Acknowledgements
 
@@ -772,6 +773,9 @@ flawed execution of a good idea. Courier is based on a bunch of helper functions
 I wrote for using Pharmacist primarily for HTTP requests. It attempts to present
 the most useful aspects of Pharmacist in a much less ceremonious API that is
 closer to traditional low-level HTTP libraries.
+
+As always, [Magnar Sveen](https://github.com/magnars) has been an important
+contributor to the design of the API.
 
 ## License
 
