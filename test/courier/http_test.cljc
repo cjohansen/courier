@@ -644,7 +644,9 @@
                  :url "http://example.com/"}
            :res {:status 404
                  :body "Ok!"}
-           :success? false}])))
+           :success? false}
+          {:courier.error/data {:attempts 1}
+           :courier.error/reason :courier.error/retries-exhausted}])))
 
 (deftest includes-response-like-keys
   (is (= (with-responses {[:get "http://example.com/"]
