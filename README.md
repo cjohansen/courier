@@ -151,23 +151,24 @@ map also contains other keys, see [the result map](#the-result-map).
 
 ## Install
 
-**NB!** The goal is for Courier to become a stable library worthy of your trust,
-which never intentionally breaks backwards compatibility. Currently, however, it
-is still under development/being designed, and breaking changes should be
-expected. This will be the case for as long as the version is prefixed with a
-`0`.
+Courier is a stable library - it will never change it's public API in breaking
+way, and will never (intentionally) introduce other breaking changes.
 
 With tools.deps:
 
 ```clj
-cjohansen/courier {:mvn/version "0.2020.11.16"}
+cjohansen/courier {:mvn/version "2020.12.12"}
 ```
 
 With Leiningen:
 
 ```clj
-[cjohansen/courier "0.2020.11.16"]
+[cjohansen/courier "2020.12.12"]
 ```
+
+**NB!** Please do not be alarmed if the version/date seems "old" - this just
+means that no bugs have been discovered in a while. Courier is largely
+feature-complete, and I expect to only rarely add to its feature set.
 
 ## Parameters and dependencies
 
