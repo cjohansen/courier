@@ -57,9 +57,7 @@
                              :id 42})
          {:required [:token :id]
           :params {:token "ejY..."
-                   :id 42}
-          :lookup-params {:token "ejY..."
-                          :id 42}})))
+                   :id 42}})))
 
 (deftest lookup-params-uses-only-lookup-params
   (is (= (sut/lookup-params {:params [:token :id]
@@ -67,8 +65,7 @@
                             {:token "ejY..."
                              :id 42})
          {:required [:id]
-          :params {:id 42}
-          :lookup-params {:id 42}})))
+          :params {:id 42}})))
 
 (deftest lookup-params-with-surgical-selections
   (is (= (sut/lookup-params {:params [:token :config :id]
@@ -80,24 +77,7 @@
                                       :client-secret "..."}})
          {:required [:config :id]
           :params {:id 42
-                   :config {:host "example.com"}}
-          :lookup-params {:id 42
-                          :config {:host "example.com"}}})))
-
-(deftest lookup-path-fn
-  (is (= (sut/lookup-params {:params [:token :config :id]
-                             :lookup-params [[:config :host] :id]
-                             :prepare-lookup-params (fn [params]
-                                                      (vals params))}
-                            {:token "ejY..."
-                             :id 42
-                             :config {:host "example.com"
-                                      :client-id "..."
-                                      :client-secret "..."}})
-         {:required [:config :id]
-          :params {:id 42
-                   :config {:host "example.com"}}
-          :lookup-params [{:host "example.com"} 42]})))
+                   :config {:host "example.com"}}})))
 
 (deftest lookup-params-with-no-params
   (is (= (sut/lookup-params {}
@@ -107,8 +87,7 @@
                                       :client-id "..."
                                       :client-secret "..."}})
          {:required []
-          :params nil
-          :lookup-params nil})))
+          :params nil})))
 
 ;; make-requests tests
 
@@ -384,6 +363,33 @@
                                       :headers {"Authorization" (str "Bearer " token)}})
                            :params [:id :config :token]
                            :lookup-params [[:config :host] :id]}}
+                (sut/make-requests
+                 {:cache (cache/create-atom-map-cache cache)
+                  :params
+                  {:token {::sut/req {:req {:method :post
+                                            :url "http://example.com/security/"}}
+                           ::sut/select (comp :token :body)}
+                   :id 42
+                   :config {:host "example.com"
+                            :debug? true}}})
+                sut/collect!!
+                (map summarize-event)))
+         [[:courier.http/cache-hit :example [200 "I'm cached!"]]])))
+
+(deftest uses-prepared-lookup-params-for-cache
+  (is (= (let [cache (atom {[:example 42]
+                            {:req {:method :get
+                                   :url "http://example.com/42"}
+                             :res {:status 200
+                                   :body "I'm cached!"}}})]
+           (->> {:example {:lookup-id :example
+                           :req-fn (fn [{:keys [id token config]}]
+                                     {:url (str "http://" (:host config) "/" id)
+                                      :headers {"Authorization" (str "Bearer " token)}})
+                           :params [:id :config :token]
+                           :lookup-params [:id]
+                           :prepare-lookup-params (fn [params]
+                                                    (:id params))}}
                 (sut/make-requests
                  {:cache (cache/create-atom-map-cache cache)
                   :params

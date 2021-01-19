@@ -835,6 +835,11 @@ result is cacheable.
 
 ## Changelog
 
+### 2021.01.20
+
+Fix bug where `:prepare-lookup-params` was called before all lookup params was
+available.
+
 ### 2021.01.19
 
 Added support for `:prepare-lookup-params`, which allows for transformin the

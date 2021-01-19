@@ -51,19 +51,21 @@
   (reduce #(let [k (if (coll? %2) %2 [%2])]
              (assoc-in %1 k (get-in m k))) nil ks))
 
-(defn lookup-params [{:keys [params lookup-params prepare-lookup-params]} ctx]
+(defn lookup-params [{:keys [params lookup-params]} ctx]
   (let [required (or lookup-params params)
         params (select-paths ctx required)]
     {:required (map (fn [k] (if (coll? k) (first k) k)) required)
-     :params params
-     :lookup-params (cond-> params
-                      (ifn? prepare-lookup-params) prepare-lookup-params)}))
+     :params params}))
+
+(defn prepare-lookup-params [{:keys [prepare-lookup-params]} params]
+  (cond-> params
+    (ifn? prepare-lookup-params) prepare-lookup-params))
 
 (defn maybe-cache-result [log spec ctx cache result]
   (when (and cache (-> result :cache :cache?))
-    (let [params (:lookup-params (lookup-params spec ctx))]
+    (let [{:keys [params]} (lookup-params spec ctx)]
       (try
-        (->> (cache/store cache spec params result)
+        (->> (cache/store cache spec (prepare-lookup-params spec params) result)
              (emit log ::store-in-cache))
         (catch Exception e
           (emit log ::exception {:throwable e
@@ -173,11 +175,11 @@
 
 (defn get-cached [log cache specs k ctx]
   (let [spec (k specs)
-        {:keys [required params lookup-params]} (lookup-params spec ctx)]
+        {:keys [required params]} (lookup-params spec ctx)]
     (when (and (not (:refresh? spec))
                (= (count required) (count params)))
       (try
-        (when-let [cached (cache/retrieve cache spec lookup-params)]
+        (when-let [cached (cache/retrieve cache spec (prepare-lookup-params spec params))]
           (prepare-result log (assoc cached :path k :spec spec)))
         (catch Exception e
           (emit log ::exception {:throwable e
