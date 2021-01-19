@@ -515,11 +515,13 @@ following key:
 (get @cache cache-key) ;; Playlist response
 ```
 
+#### Surgical lookup params
+
 Sometimes your requests will use unwieldy data structures like configuration
 maps as parameters. This could lead to very large cache keys, or worse -
-sensitive data like credentials being used as cache keys. To avoid this, a cache
-param can be expressed as a vector, which will be used to `get-in` the named
-parameter.
+sensitive data like credentials being used as cache keys. To avoid this, a
+lookup param can be expressed as a vector, which will be used to `get-in` the
+named parameter.
 
 Let's parameterize the Spotify API host using a configuration map:
 
@@ -560,6 +562,69 @@ Which will result in the following cache key for the atom map caches:
   [:spotify-playlist-request
    {:config {:spotify-host "api.spotify.com"}
     :playlist-id "3b5045a0-05fc-4d7f-8b61-9c6d37ab90e6"}])
+```
+
+#### Manipulating lookup params
+
+Some endpoints do not take any identifying parameters other than the token, and
+returns content belonging to the user for whom the token is issued. If the token
+contains information that's stable across tokens, you can pass the lookup
+parameters through a transforming function before looking up the value in the
+cache. In this case you will always need a token, but maybe you won't need to
+make the data request over again.
+
+Let's fetch all the playlists belonging to a user. This resource only uses the
+token to identify the user.
+
+```clj
+(def spotify-playlists-request
+  {:lookup-id :spotify-playlists
+   :params [:token :config]
+   :lookup-params [[:config :spotify-host] :token]
+   :req-fn (fn [{:keys [token config]}]
+             {:method :get
+              :url (format "https://%s/playlists/"
+                           (:spotify-host config))
+              :oauth-token (:access_token token)})
+   :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
+```
+
+This caches with the token, which is no good. We can add
+`:prepare-lookup-params` to extract only the relevant bits:
+
+```clj
+(defn base64-decode [s]
+  (.decode (java.util.Base64/getDecoder) s))
+
+(defn decode-jwt [token]
+  (-> (clojure.string/split token #"\.")
+      second
+      base64-decode
+      String.
+      (cheshire.core/parse-string keyword)))
+
+(def spotify-playlists-request
+  {:lookup-id :spotify-playlists
+   :params [:token :config]
+   :lookup-params [[:config :spotify-host] :token]
+   :prepare-lookup-params (fn [params]
+                            {:host (get-in params [:config :spotify-host])
+                             :user-id (:userId (decode-jwt (:token params)))})
+   :req-fn (fn [{:keys [token config]}]
+             {:method :get
+              :url (format "https://%s/playlists/"
+                           (:spotify-host config))
+              :oauth-token (:access_token token)})
+   :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
+```
+
+Which will result in the following cache key for the atom map caches:
+
+```clj
+(def cache-key
+  [:spotify-playlists
+   {:host "api.spotify.com"
+    :user-id "3b5045a0-05fc-4d7f-8b61-9c6d37ab90e6"}])
 ```
 
 ### Atom map cache
@@ -771,6 +836,9 @@ result is cacheable.
 ## Changelog
 
 ### 2021.01.19
+
+Added support for `:prepare-lookup-params`, which allows for transformin the
+lookup parameters before using them to store and retrieve items from the cache.
 
 Fix a bug where `POST` requests where not cached by default when `:cache-fn` was
 provided.
