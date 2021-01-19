@@ -37,9 +37,6 @@
 (defn retryable? [{:keys [req]}]
   (= :get (:method req)))
 
-(defn cacheable? [{:keys [req]}]
-  (= :get (:method req)))
-
 (defn requests-for [exchanges path]
   (seq (filter (comp #{path} :path) exchanges)))
 
@@ -357,9 +354,9 @@
          (when-let [refresh (refresh-fn exchange)]
            {:refresh refresh}))))))
 
-(defn cache-fn [{:keys [ttl ttl-fn] :as opt}]
+(defn cache-fn [{:keys [ttl ttl-fn cacheable?] :as opt}]
   (let [ttl-fn (or ttl-fn (when ttl (constantly ttl)))
-        cacheable? (:cacheable? opt cacheable?)]
+        cacheable? (or cacheable? (constantly true))]
     (fn [{:keys [res] :as exchange}]
       (when (and (cacheable? exchange) ttl-fn)
         (let [ttl (ttl-fn exchange)]

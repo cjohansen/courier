@@ -757,7 +757,23 @@ testing purposes:
   - `:cache?` - If `true`, the response will be cached _if a ttl is specified_.
   - `:expires-at` - An epoch millis at which the response expires from the cache.
 
+### `(courier.http/cache-fn {:ttl :ttl-fn :cacheable?})`
+
+Returns a function that can be passed as `:cache-fn` to `courier.http/request`.
+Either set `:ttl` to a number of milliseconds to cache results, or set `:ttl` to
+a function that will return the number of milliseconds. If set, it will be
+passed a map of `:req` and `:res` to aid in the decision.
+
+If you only want to cache some request/response pairs, pass a function to
+`:cacheable?` which takes a map of `:req` and `:res` and returns `true` if the
+result is cacheable.
+
 ## Changelog
+
+### 2021.01.19
+
+Fix a bug where `POST` requests where not cached by default when `:cache-fn` was
+provided.
 
 ### 2020.12.12
 
