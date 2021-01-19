@@ -254,6 +254,37 @@
                   :headers {"Authorization" "Bearer ejY..."}
                   :method :get}}})))
 
+(deftest makes-multiple-dependent-requests
+  (is (= (with-responses {[:post "http://example.com/security/"]
+                          [{:status 200 :body {:clue "ejY"}}]
+
+                          [:get "http://example.com/super-security/ejY"]
+                          [{:status 200 :body {:token "111"}}]}
+           (->> {:example {:req-fn (fn [{:keys [token]}]
+                                     {:url "http://example.com/"
+                                      :headers {"Authorization" (str "Bearer " token)}})
+                           :params [:token]}}
+                (sut/make-requests
+                 {:params
+                  {:clue {::sut/req {:req {:method :post
+                                           :url "http://example.com/security/"}}
+                          ::sut/select (comp :clue :body)}
+                   :token {::sut/req {:req-fn (fn [{:keys [clue]}]
+                                                {:method :get
+                                                 :url (str "http://example.com/super-security/" clue)})
+                                      :params [:clue]}
+                           ::sut/select (comp :token :body)}
+                   :other "Stuff"}})
+                sut/collect!!
+                last
+                :res))
+         {:status 200
+          :body {:request
+                 {:url "http://example.com/"
+                  :throw-exceptions false
+                  :headers {"Authorization" "Bearer 111"}
+                  :method :get}}})))
+
 (deftest loads-result-from-cache
   (is (= (let [cache (atom {[::sut/req {:method :get
                                         :url "http://example.com/"}]
