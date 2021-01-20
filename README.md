@@ -875,7 +875,7 @@ contributor to the design of the API.
 
 ## License
 
-Copyright © 2020 Christian Johansen
+Copyright © 2020-2021 Christian Johansen
 
 Distributed under the Eclipse Public License either version 1.0 or (at your
 option) any later version.
