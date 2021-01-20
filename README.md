@@ -290,6 +290,10 @@ The `:log` list contains maps with the following keys:
 - `:res` - The full response
 - `:retry` - The result of the `:retry-fn`, if set
 - `:cache` - The result of the `:cache-fn`, if set
+- `:event` - The courier event, one of
+  - `:courier.http/response`
+  - `:courier.http/cache-hit`
+  - `:courier.http/failed`
 
 `:retry` and `:cache` are only available when relevant.
 
@@ -839,6 +843,9 @@ result is cacheable.
 
 Fix bug where `:prepare-lookup-params` was called before all lookup params was
 available.
+
+Include cache retrieval events in the `:log` in meta data returned from
+`request`. Also include the event name on each entry in the log.
 
 ### 2021.01.19
 

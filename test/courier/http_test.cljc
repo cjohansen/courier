@@ -689,7 +689,27 @@
                  :throw-exceptions false}
            :res {:status 200
                  :body "Ok!"}
-           :success? true}])))
+           :success? true
+           :event :courier.http/response}])))
+
+(deftest includes-request-log-events-for-cache-retrieval
+  (is (= (with-responses {[:get "https://example.com/"]
+                          [{:status 200
+                            :body {:ttl 100}}]}
+           (let [cache (cache/create-atom-map-cache (atom {}))
+                 spec {:req {:url "https://example.com/"}
+                       :cache-fn (sut/cache-fn {:ttl-fn #(-> % :res :body :ttl)})}]
+             (sut/request spec {:cache cache})
+             (->> (sut/request spec {:cache cache})
+                  :log
+                  (map #(dissoc % :expires-at :cached-at)))))
+         [{:req {:url "https://example.com/"
+                 :method :get
+                 :throw-exceptions false}
+           :res {:status 200
+                 :body {:ttl 100}}
+           :success? true
+           :event :courier.http/cache-hit}])))
 
 (deftest includes-request-log-on-failure
   (is (= (with-responses {[:get "http://example.com/"]
@@ -702,9 +722,11 @@
                  :url "http://example.com/"}
            :res {:status 404
                  :body "Ok!"}
-           :success? false}
+           :success? false
+           :event :courier.http/response}
           {:courier.error/data {:attempts 1}
-           :courier.error/reason :courier.error/retries-exhausted}])))
+           :courier.error/reason :courier.error/retries-exhausted
+           :event :courier.http/failed}])))
 
 (deftest includes-response-like-keys
   (is (= (with-responses {[:get "http://example.com/"]
@@ -827,7 +849,8 @@
           {:id 42})
          {:success? false
           :log [{:courier.error/reason :courier.error/missing-params
-                 :courier.error/data [:id]}]
+                 :courier.error/data [:id]
+                 :event :courier.http/failed}]
           :hint (str "Make sure you pass parameters to your request as "
                      "`:params` in the options map, not directly in the map, "
                      "e.g.: {:params {:id 42}}, not {:id 42}")})))

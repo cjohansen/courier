@@ -298,9 +298,6 @@
 (defn collect!! [ch]
   (siphon!! ch nil))
 
-(defn strip-event [e]
-  (dissoc e :event :path))
-
 (defn prepare-full-result-for [k opt events]
   (let [reqs (filter (comp #{::response ::cache-hit ::store-in-cache ::failed} :event) events)
         res (last (filter (comp #{k} :path) reqs))
@@ -314,14 +311,14 @@
      (select-keys (:res res) [:status :headers :body])
      {:success? (boolean (:success? res))
       :log (->> reqs
-                (remove (comp #{::cache-hit ::store-in-cache} :event))
-                (map strip-event))}
+                (remove (comp #{::store-in-cache} :event))
+                (map #(dissoc % :path)))}
      (when (= ::cache-hit (:event res))
        {:cache-status (assoc cache-status :cache-hit? true)})
      (when (= ::store-in-cache (:event res))
        {:cache-status (assoc cache-status :stored-in-cache? true)})
      (when-let [exceptions (seq (filter (comp #{::exception} :event) events))]
-       {:exceptions (map strip-event exceptions)})
+       {:exceptions (map #(dissoc % :event :path) exceptions)})
      (when (and (= ::failed (:event res))
                 (= :courier.error/missing-params (:courier.error/reason res)))
        (when-let [possibly-misplaced (some (set (keys opt)) (:courier.error/data res))]
