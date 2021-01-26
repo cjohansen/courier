@@ -839,6 +839,16 @@ result is cacheable.
 
 ## Changelog
 
+### 2021.01.26
+
+Specifically handle unknown host exceptions to make it clearer why a request
+fails.
+
+Do not report failed responses as "retries exhausted" when there was no
+retries - report as failed request instead.
+
+Include the last response on failures due to exhausted retries.
+
 ### 2021.01.20
 
 Fix bug where `:prepare-lookup-params` was called before all lookup params was

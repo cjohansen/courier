@@ -194,8 +194,11 @@
           [::sut/response :example [500]]
           [::sut/request :example [:get "http://example.com/"]]
           [::sut/response :example [500]]
-          [::sut/failed :example :courier.error/retries-exhausted {:max-retries 1
-                                                                   :attempts 2}]])))
+          [::sut/failed :example
+           :courier.error/retries-exhausted
+           {:max-retries 1
+            :attempts 2
+            :last-res {:status 500}}]])))
 
 (deftest passes-named-parameters-to-req-fn
   (is (= (->> {:example {:req-fn (fn [params]
@@ -724,8 +727,9 @@
                  :body "Ok!"}
            :success? false
            :event :courier.http/response}
-          {:courier.error/data {:attempts 1}
-           :courier.error/reason :courier.error/retries-exhausted
+          {:courier.error/reason :courier.error/request-failed
+           :courier.error/data {:status 404
+                                :body "Ok!"}
            :event :courier.http/failed}])))
 
 (deftest includes-response-like-keys
@@ -854,3 +858,16 @@
           :hint (str "Make sure you pass parameters to your request as "
                      "`:params` in the options map, not directly in the map, "
                      "e.g.: {:params {:id 42}}, not {:id 42}")})))
+
+(defmethod client/request [:get "https://lolcathost"] [req]
+  (throw (java.net.UnknownHostException. "Boom!")))
+
+(deftest properly-communicates-unknown-host
+  (is (= (-> (sut/request {:req {:url "https://lolcathost"}})
+             :log
+             last)
+         {:courier.error/reason :courier.error/unknown-host
+          :courier.error/data {:req {:url "https://lolcathost"
+                                     :method :get
+                                     :throw-exceptions false}}
+          :event :courier.http/failed})))

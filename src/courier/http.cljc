@@ -74,12 +74,16 @@
 
 (defn fulfill-exchange [log exchange]
   (a/go
-   (try
-     (let [res (a/<! #?(:cljs (client/request (:req exchange))
-                        :clj (a/thread (client/request (:req exchange)))))]
-       (prepare-result log (assoc exchange :res res)))
-     (catch Exception e
-       (assoc exchange :exception e)))))
+    (let [res (a/<! #?(:cljs (client/request (:req exchange))
+                       :clj (a/thread
+                              (try
+                                (client/request (:req exchange))
+                                (catch Exception e
+                                  e)))))]
+      (if (instance? #?(:clj Exception
+                        :cljs Error) res)
+        (assoc exchange :exception res)
+        (prepare-result log (assoc exchange :res res))))))
 
 (def validations
   {:retry {:retry? boolean?
@@ -237,6 +241,11 @@
            :ks (set (concat ks unresolved))
            :exchanges exchanges})))
 
+(defn unknown-host? [{:keys [exception]}]
+  (and exception
+       #?(:clj (instance? java.net.UnknownHostException exception)
+          :cljs false)))
+
 (defn explain-failed-request [specs ctx exchanges k]
   (let [spec (k specs)
         reqs (requests-for exchanges k)]
@@ -245,9 +254,18 @@
       {:courier.error/reason :courier.error/missing-params
        :courier.error/data (remove #(contains? ctx %) (:params spec))}
 
+      (unknown-host? (last reqs))
+      {:courier.error/reason :courier.error/unknown-host
+       :courier.error/data {:req (:req (last reqs))}}
+
+      (= (:max-retries (:retry (last reqs)) 0) 0)
+      {:courier.error/reason :courier.error/request-failed
+       :courier.error/data (:res (last reqs))}
+
       (< (:max-retries (:retry (last reqs)) 0) (count reqs))
       {:courier.error/reason :courier.error/retries-exhausted
-       :courier.error/data (merge {:attempts (count (requests-for exchanges k))}
+       :courier.error/data (merge {:attempts (count (requests-for exchanges k))
+                                   :last-res (-> reqs last :res)}
                                   (select-keys (:retry (last reqs)) [:max-retries]))}
 
       ;; Shouldn't happen (tm)
