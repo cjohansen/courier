@@ -4,7 +4,7 @@
   <packaging>jar</packaging>
   <groupId>cjohansen</groupId>
   <artifactId>courier</artifactId>
-  <version>2021.01.20</version>
+  <version>2021.01.26</version>
   <name>courier</name>
   <dependencies>
     <dependency>
@@ -43,7 +43,7 @@
   <scm>
     <connection>scm:git:git://github.com/cjohansen/courier.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/cjohansen/courier.git</developerConnection>
-    <tag>v2021.01.20</tag>
+    <tag>v2021.01.26</tag>
     <url>https://github.com/cjohansen/courier</url>
   </scm>
 </project>

@@ -157,13 +157,13 @@ way, and will never (intentionally) introduce other breaking changes.
 With tools.deps:
 
 ```clj
-cjohansen/courier {:mvn/version "2021.01.20"}
+cjohansen/courier {:mvn/version "2021.01.26"}
 ```
 
 With Leiningen:
 
 ```clj
-[cjohansen/courier "2021.01.20"]
+[cjohansen/courier "2021.01.26"]
 ```
 
 **NB!** Please do not be alarmed if the version/date seems "old" - this just
