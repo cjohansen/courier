@@ -34,6 +34,14 @@
            :url "https://example.com/"
            :lookup-params {:id 42}}])))
 
+(deftest cache-key--lookup-id-and-params
+  (is (= (sut/cache-key
+          {:req-fn identity
+           :lookup-id :get-stuff}
+          {:id 42
+           :name "Someone"})
+         [:get-stuff {:id 42 :name "Someone"}])))
+
 (deftest inline-req-fn
   (is (->> (sut/cache-key {:req-fn (fn [params])} nil)
            first
@@ -57,3 +65,27 @@
                                    {:name "lol"
                                     :ns "ok"})} {:id 42})
          [:ok/lol {:id 42}])))
+(deftest cache-key-filename--inline-request
+  (is (= (sut/filename "/tmp" {:req {:method :get
+                                     :url "http://localhost"}} {})
+         "/tmp/courier.http.req/8e/36e38490976155a114f40db433e4.edn")))
+
+(deftest cache-key-filename--lookup-id-params
+  (is (= (sut/filename "/tmp"
+                       {:req-fn identity
+                        :lookup-id :services/thing}
+                       {:id 42
+                        :sub-category "luls"})
+         "/tmp/services.thing/fd/2c9f221bf45ca8977949aed85c3d0.edn")))
+
+(deftest redis-cache-key--inline-request
+  (is (= (sut/redis-cache-key {:req {:method :get
+                                     :url "http://localhost"}} {})
+         "courier.http/req/8e36e38490976155a114f40db433e4")))
+
+(deftest redis-cache-key--lookup-id-params
+  (is (= (sut/redis-cache-key {:req-fn identity
+                               :lookup-id :services/thing}
+                              {:id 42
+                               :sub-category "luls"})
+         "services/thing/fd2c9f221bf45ca8977949aed85c3d0")))

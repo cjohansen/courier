@@ -147,7 +147,7 @@
 (defn- redis-f [f & args]
   (apply (ns-resolve (symbol "taoensso.carmine") (symbol (name f))) args))
 
-(defn- redis-cache-key [spec params]
+(defn redis-cache-key [spec params]
   (let [id (cache-id spec)
         params (get-cache-relevant-params spec params)]
     (->> [(namespace id)
