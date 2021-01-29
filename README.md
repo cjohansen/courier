@@ -654,6 +654,54 @@ Which will result in the following cache key for the atom map caches:
 *) The `:lookup-params` are still needed to let Courier know which parameters
 must be realized before calling the `:prepare-lookup-params` function.
 
+#### Custom lookup keys
+
+If you need to interact with the cache outside of Courier, you might want to
+fully control the cache keys. There are two ways to do this:
+
+1. Statically, as data on the request (with `:cache-key`)
+2. Dynamically, by implementing the multi-method `courier.cache/cache-key`
+
+In both cases, Courier will use the provided value in place of computing its
+own.
+
+To provide a static key, provide any value with `:cache-key`:
+
+```
+(def spotify-playlists-request
+  {:lookup-id :spotify-playlists
+   :params [:token :config]
+   :cache-key "my-playlist"
+   :req-fn (fn [{:keys [token config]}]
+             {:method :get
+              :url (format "https://%s/playlists/"
+                           (:spotify-host config))
+              :oauth-token (:access_token token)})
+   :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
+```
+
+To dynamically compute a cache key based on the minimal set of required lookup
+params, implement `courier.cache/cache-key`, which dispatches on `:lookup-id`:
+
+```clj
+(require '[courier.cache :as cache])
+
+(defmethod cache/cache-key :spotify-playlists [spec params]
+  [(cache/cache-id spec) params])
+```
+
+Be aware that individual cache implementations might still make last minute
+changes to the keys to ensure valid keys.
+
+The **file cache** requires the key to be a string that does not start with a
+slash. The string will be used as a relative path within the cache directory.
+The filename used by the file cache can be retrieved with
+`(courier.cache/make-filename cache-key)`.
+
+The **Redis cache** requires string keys. If passed anything else, it will be
+converted to a string. The key used by the Redis cache can be retrieved with
+`(courier.cache/make-redis-key cache-key)`.
+
 ### Atom map cache
 
 The atom map cache gives you a quick and easy in-memory cache for your HTTP
@@ -869,6 +917,12 @@ If you only want to cache some request/response pairs, pass a function to
 result is cacheable.
 
 ## Changelog
+
+### 2021.xx.yy
+
+Expose an API for cache keys for the various caches, and support custom cache
+keys both as data on the request spec, and via get multi-method
+`courier.cache/cache-key`.
 
 ### 2021.02.22
 

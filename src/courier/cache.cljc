@@ -58,8 +58,11 @@
        (when-not (empty? params)
          {:lookup-params params})))))
 
-(defn cache-key [spec params]
-  [(cache-id spec) (get-cache-relevant-params spec params)])
+(defmulti cache-key (fn [spec params] (:lookup-id spec)))
+
+(defmethod cache-key :default [spec params]
+  (or (:cache-key spec)
+      [(cache-id spec) (get-cache-relevant-params spec params)]))
 
 (defn expired? [res]
   (and (int? (:expires-at res))
@@ -99,11 +102,37 @@
            (str (namespace id) "."))
          (name id))))
 
+(defn- stringify-key-elems [k & [{:keys [ns-sep]}]]
+  (map (fn [k]
+         (cond
+           (string? k) k
+           (number? k) (str k)
+           (keyword? k) (str (when (namespace k)
+                               (str (namespace k) (or ns-sep ".")))
+                             (name k))
+           :default (fingerprint/fingerprint k)))
+       (if (sequential? k) k [k])))
+
+(defn shard [s]
+  (if (< 2 (count s))
+    (let [[_ prefix postfix] (re-find #"(..)(.+)" s)]
+      [prefix postfix])
+    [s]))
+
+(defn shard-last [strs]
+  (concat (drop-last 1 strs)
+          (mapcat shard (take-last 1 strs))))
+
+(defn make-filename [k]
+  (if (string? k)
+    (str/replace k #"^/" "")
+    (str (->> (stringify-key-elems k {:ns-sep "."})
+              shard-last
+              (str/join "/"))
+         ".edn")))
+
 (defn filename [dir spec params]
-  (let [fingerprinted-name (fingerprint/fingerprint (get-cache-relevant-params spec params))
-        [_ prefix postfix] (re-find #"(..)(.+)" fingerprinted-name)
-        dirname (str dir "/" (str-id spec) "/" prefix)]
-    (str dirname "/" postfix ".edn")))
+  (str dir "/" (make-filename (cache-key spec params))))
 
 (defn slurp-edn [file]
   (try
@@ -118,21 +147,22 @@
 
 (defn create-file-cache [{:keys [dir]}]
   (assert (string? dir) "Can't create file cache without directory")
-  (fs/ensure-dir dir)
-  (reify Cache
-    (lookup [_ spec params]
-      (when-let [file (filename dir spec params)]
-        (when-let [val (slurp-edn file)]
-          (if (expired? val)
-            (do
-              (fs/delete-file file)
-              nil)
-            val))))
-    (put [_ spec params res]
-      (when-let [file (filename dir spec params)]
-        (fs/ensure-dir (fs/dirname file))
-        (fs/write-file file (pr-str (assoc res ::file-name file)))
-        {::file-name file}))))
+  (let [dir (str/replace dir #"/$" "")]
+    (fs/ensure-dir dir)
+    (reify Cache
+      (lookup [_ spec params]
+        (when-let [file (filename dir spec params)]
+          (when-let [val (slurp-edn file)]
+            (if (expired? val)
+              (do
+                (fs/delete-file file)
+                nil)
+              val))))
+      (put [_ spec params res]
+        (when-let [file (filename dir spec params)]
+          (fs/ensure-dir (fs/dirname file))
+          (fs/write-file file (pr-str (assoc res ::file-name file)))
+          {::file-name file})))))
 
 (def ^:private carmine-available?
   "Carmine/Redis is an optional dependency, so we try to load it runtime. If the
@@ -149,14 +179,14 @@
 (defn- redis-f [f & args]
   (apply (ns-resolve (symbol "taoensso.carmine") (symbol (name f))) args))
 
-(defn redis-cache-key [spec params]
-  (let [id (cache-id spec)
-        params (get-cache-relevant-params spec params)]
-    (->> [(namespace id)
-          (name id)
-          (fingerprint/fingerprint params)]
-         (remove empty?)
+(defn make-redis-key [k]
+  (if (string? k)
+    k
+    (->> (stringify-key-elems k {:ns-sep "/"})
          (str/join "/"))))
+
+(defn redis-cache-key [spec params]
+  (make-redis-key (cache-key spec params)))
 
 (defn create-redis-cache [conn-opts]
   (assert carmine-available? "com.taoensso/carmine needs to be on the classpath")

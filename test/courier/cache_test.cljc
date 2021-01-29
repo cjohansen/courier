@@ -65,6 +65,22 @@
                                    {:name "lol"
                                     :ns "ok"})} {:id 42})
          [:ok/lol {:id 42}])))
+
+(deftest cache-key--custom-cache-key-data
+  (is (= (sut/cache-key {:req-fn (with-meta (fn [_]) {:name "lol"})
+                         :cache-key {:custom "Key"}}
+                        {:id 42})
+         {:custom "Key"})))
+
+(defmethod sut/cache-key ::fully-custom [spec params]
+  "/lol/sir")
+
+(deftest cache-key--custom-implementation
+  (is (= (sut/cache-key {:req-fn (with-meta (fn [_]) {:name "lol"})
+                         :lookup-id ::fully-custom}
+                        {:id 42})
+         "/lol/sir")))
+
 (deftest cache-key-filename--inline-request
   (is (= (sut/filename "/tmp" {:req {:method :get
                                      :url "http://localhost"}} {})
@@ -84,6 +100,34 @@
                        {:id 42})
          "/tmp/lol/d4/db8d433b3e2cee1cf01b712b1f267.edn")))
 
+(deftest cache-key-filename--custom-cache-key-data
+  (is (= (sut/filename "/tmp"
+                       {:req-fn (with-meta (fn [_]) {:name "lol"})
+                        :cache-key "this/file.edn"}
+                       {:id 42})
+         "/tmp/this/file.edn")))
+
+(deftest cache-key-filename--custom-cache-key-data-keyword
+  (is (= (sut/filename "/tmp"
+                       {:req-fn (with-meta (fn [_]) {:name "lol"})
+                        :cache-key ::key}
+                       {:id 42})
+         "/tmp/co/urier.cache-test.key.edn")))
+
+(deftest cache-key-filename--custom-cache-key-data-vector
+  (is (= (sut/filename "/tmp"
+                       {:req-fn (with-meta (fn [_]) {:name "lol"})
+                        :cache-key [42 ::key {:ok true}]}
+                       {:id 42})
+         "/tmp/42/courier.cache-test.key/31/7e30b8f636bcd5e230d22fea23bb.edn")))
+
+(deftest cache-key-filename--custom-implementation
+  (is (= (sut/filename "/tmp"
+                       {:req-fn (with-meta (fn [_]) {:name "lol"})
+                        :lookup-id ::fully-custom}
+                       {:id 42})
+         "/tmp/lol/sir")))
+
 (deftest redis-cache-key--inline-request
   (is (= (sut/redis-cache-key {:req {:method :get
                                      :url "http://localhost"}} {})
@@ -100,3 +144,27 @@
   (is (= (sut/redis-cache-key {:req-fn (with-meta (fn [_]) {:name "lol"})}
                               {:id 42})
          "lol/d4db8d433b3e2cee1cf01b712b1f267")))
+
+(deftest redis-cache-key--custom-cache-key-data
+  (is (= (sut/redis-cache-key {:req-fn (with-meta (fn [_]) {:name "lol"})
+                               :cache-key "put/it/in/redis"}
+                              {:id 42})
+         "put/it/in/redis")))
+
+(deftest redis-cache-key--custom-cache-key-data-keyword
+  (is (= (sut/redis-cache-key {:req-fn (with-meta (fn [_]) {:name "lol"})
+                               :cache-key ::key}
+                              {:id 42})
+         "courier.cache-test/key")))
+
+(deftest redis-cache-key--custom-cache-key-data-vector
+  (is (= (sut/redis-cache-key {:req-fn (with-meta (fn [_]) {:name "lol"})
+                               :cache-key [42 ::key {:ok true}]}
+                              {:id 42})
+         "42/courier.cache-test/key/317e30b8f636bcd5e230d22fea23bb")))
+
+(deftest redis-cache-key--custom-implementation
+  (is (= (sut/redis-cache-key {:req-fn (with-meta (fn [_]) {:name "lol"})
+                               :lookup-id ::fully-custom}
+                              {:id 42})
+         "/lol/sir")))
