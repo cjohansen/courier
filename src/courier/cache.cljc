@@ -95,7 +95,9 @@
 
 (defn str-id [spec]
   (let [id (cache-id spec)]
-    (str (namespace id) "." (name id))))
+    (str (when (namespace id)
+           (str (namespace id) "."))
+         (name id))))
 
 (defn filename [dir spec params]
   (let [fingerprinted-name (fingerprint/fingerprint (get-cache-relevant-params spec params))

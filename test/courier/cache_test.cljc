@@ -78,6 +78,12 @@
                         :sub-category "luls"})
          "/tmp/services.thing/fd/2c9f221bf45ca8977949aed85c3d0.edn")))
 
+(deftest cache-key-filename--function-name-params
+  (is (= (sut/filename "/tmp"
+                       {:req-fn (with-meta (fn [_]) {:name "lol"})}
+                       {:id 42})
+         "/tmp/lol/d4/db8d433b3e2cee1cf01b712b1f267.edn")))
+
 (deftest redis-cache-key--inline-request
   (is (= (sut/redis-cache-key {:req {:method :get
                                      :url "http://localhost"}} {})
@@ -89,3 +95,8 @@
                               {:id 42
                                :sub-category "luls"})
          "services/thing/fd2c9f221bf45ca8977949aed85c3d0")))
+
+(deftest redis-cache-key--function-name-params
+  (is (= (sut/redis-cache-key {:req-fn (with-meta (fn [_]) {:name "lol"})}
+                              {:id 42})
+         "lol/d4db8d433b3e2cee1cf01b712b1f267")))
