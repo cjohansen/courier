@@ -260,7 +260,7 @@
       (= (:max-retries (:retry (last reqs)) 0) 0)
       (assoc (last reqs)
              :courier.error/reason :courier.error/request-failed
-             :courier.error/data (:res (last reqs)))
+             :courier.error/data (last reqs))
 
       (< (:max-retries (:retry (last reqs)) 0) (count reqs))
       (assoc (last reqs)
