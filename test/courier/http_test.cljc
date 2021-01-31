@@ -728,8 +728,14 @@
            :success? false
            :event :courier.http/response}
           {:courier.error/reason :courier.error/request-failed
-           :courier.error/data {:status 404
-                                :body "Ok!"}
+           :courier.error/data {:path ::sut/req
+                                :spec {:req {:url "http://example.com/"}}
+                                :req {:method :get
+                                      :throw-exceptions false
+                                      :url "http://example.com/"}
+                                :res {:body "Ok!"
+                                      :status 404}
+                                :success? false}
            :event :courier.http/failed}])))
 
 (deftest includes-response-like-keys
