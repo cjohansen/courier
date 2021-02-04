@@ -198,7 +198,10 @@
            :courier.error/retries-exhausted
            {:max-retries 1
             :attempts 2
-            :last-res {:status 500}}]])))
+            :last-res {:status 500}
+            :req {:method :get
+                  :throw-exceptions false
+                  :url "http://example.com/"}}]])))
 
 (deftest passes-named-parameters-to-req-fn
   (is (= (->> {:example {:req-fn (fn [params]
