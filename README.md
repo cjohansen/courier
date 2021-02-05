@@ -70,7 +70,7 @@ more low-level HTTP clients:
    :retry-fn (http/retry-fn {:retries 2}) ;; 3
 
    :cache-fn (http/cache-fn
-              {:ttl-fn #(* 1000 (-> % :res :body :expires_in))})}) ;; 4
+              {:ttl-fn #(-> % :res :body :expires_in (* 1000))})}) ;; 4
 
 (def spotify-playlist-request
   {:params [:token :playlist-id]
@@ -80,20 +80,21 @@ more low-level HTTP clients:
              {:method :get
               :url (format "https://api.spotify.com/playlists/%s"
                            playlist-id)
-              :oauth-token (:access_token token)})
+              :oauth-token token})
 
    :retry-fn (http/retry-fn
               {:retries 2
-               :refresh-fn #(when (= 403 (-> % :res :status)) ;; 6
+               :refresh-fn #(when (-> % :res :status (= 401)) ;; 6
                               [:token])})
 
    :cache-fn (http/cache-fn {:ttl (* 10 1000)})}) ;; 7
 
-(def cache (atom (cache/lru-cache-factory {} :threshold 8192))) ;; 8
+(def cache (-> (atom (cache/lru-cache-factory {} :threshold 8192))) ;; 8
+               (courier-cache/create-atom-map-cache)) ;; 9
 
-(http/request ;; 9
+(http/request ;; 10
  spotify-playlist-request
- {:cache (courier-cache/create-atom-map-cache cache) ;; 10
+ {:cache cache
   :params {:client-id "my-api-client" ;; 11
            :client-secret "api-secret"
            :playlist-id "3abdc"
@@ -114,21 +115,21 @@ more low-level HTTP clients:
    `:lookup-params`, the token request can be skipped completely when the
    playlist is cached.
 6. When retrying a request, we can tell Courier to refresh some parameters. In
-   this case, if the response was a 403, we will retry the request with a fresh
+   this case, if the response was a 401, we will retry the request with a fresh
    token.
 7. Cache playlists for a fixed 10 seconds.
 8. Courier provides a caching protocol and comes with an implementation for
    atoms with map-like data structures, like the ones provided by
    `clojure.core.cache`.
-9. Make the request(s) and return the result of the playlist request.
-10. Reifies the `courier.cache/Cache` protocol for an atom with a map-like data
+9. Reifies the `courier.cache/Cache` protocol for an atom with a map-like data
     structure.
+10. Make the request(s) and return the result of the playlist request.
 11. Provide inline values for deferred parameters `:client-id` and
     `:client-secret`.
 12. `:token` is provided as another request. If the playlist request is not
     cached, Courier will first request a token (including retries, checking for
     a cached token, etc), then request playlists. If the playlist request fails
-    with a 403, Courier will fetch a new token and retry the playlist request.
+    with a 401, Courier will fetch a new token and retry the playlist request.
 13. When passing the result of the token request to the playlist request, pass
     `:access_token` from the response's `:body`. In other words, in the playlist
     request's `:req-fn`, `:token` will be the OAuth token string.
@@ -223,12 +224,12 @@ We _could_ manually piece the two together:
   (http/request
    spotify-token-request
    {:params {:client-id "username"
-             :client-secret "password"
-             :playlist-id "4abdc"}}))
+             :client-secret "password"}}))
 
 (http/request
  spotify-playlist-request
- {:params {:token (:access_token (:body token))}})
+ {:params {:playlist-id "4abdc"
+           :token (:access_token (:body token))}})
 ```
 
 Even better, let Courier manage the dependency:
@@ -238,7 +239,10 @@ Even better, let Courier manage the dependency:
 
 (http/request
  spotify-playlist-request
- {:params {:token {::http/req spotify-token-request
+ {:params {:client-id "username"
+           :client-secret "password"
+           :playlist-id "4abdc"
+           :token {::http/req spotify-token-request
                    ::http/select (comp :access_token :body)}}})
 
 ```
@@ -336,7 +340,7 @@ decision, pass a function with the `:retryable?` keyword:
         :url "http://example.com/api/demo"}
   :retry-fn (http/retry-fn
              {:retries 2
-              :retryable? #(= :get (-> % :req :method))})})
+              :retryable? #(-> % :req :method (= :get))})})
 ```
 
 The function is passed a map with both `:req` and `:res` to help inform its
@@ -386,7 +390,7 @@ determine success:
 
 If you are using [caching](#caching), it might not be worth retrying a fetch
 with the same (possibly stale) set of dependencies - you might need to refresh
-some or all of them. To continue the example of the authentication token, a 403
+some or all of them. To continue the example of the authentication token, a 401
 response from a service could be worth retrying, but only with a fresh token.
 
 `:refresh-fn` takes a function that is passed a map of `:req` and `:res`, and
@@ -402,15 +406,30 @@ one:
              {:method :get
               :url (format "https://api.spotify.com/playlists/%s"
                            playlist-id)
-              :oauth-token (:access_token token)})
+              :oauth-token token})
    :retry-fn (http/retry-fn
               {:retries 2
-               :refresh-fn #(when (= 403 (-> % :res :status))
+               :refresh-fn #(when (= 401 (-> % :res :status))
                               [:token])})})
 ```
 
-If the response to this request is an HTTP 403, Courier will grab a new `:token`
-by refreshing that request (bypassing the cache) and then try again.
+If the response to this request is an HTTP 401, Courier will grab a new `:token`
+by refreshing that request (bypassing the cache) and then try again. This
+naturally requires that the `:token` param is passed as a request map, like here:
+
+```clj
+(http/request
+ spotify-playlist-request
+ {:cache cache
+  :params {:client-id "my-api-client"
+           :client-secret "api-secret"
+           :playlist-id "3abdc"
+           :token {::http/req spotify-token-request
+                   ::http/select (comp :access_token :body)}}})
+```
+
+If the `:token` param is instead passed as a literal, Courier cannot refresh it
+and the request will fail.
 
 ## Caching
 
@@ -441,11 +460,12 @@ A reified instance of a cache can be passed to `http/request` as `:cache`:
          '[courier.cache :as courier-cache]
          '[clojure.core.cache :as cache])
 
-(def cache (atom (cache/lru-cache-factory {} :threshold 8192)))
+(def cache-atom (atom (cache/lru-cache-factory {} :threshold 8192))) ;; def for inspection
+(def cache (courier-cache/create-atom-map-cache cache-atom))
 
 (http/request
  spotify-playlist-request
- {:cache (courier-cache/create-atom-map-cache cache)
+ {:cache cache
   :params {:client-id "my-api-client"
            :client-secret "api-secret"
            :playlist-id "3abdc"
@@ -516,7 +536,7 @@ following key:
   [:spotify-playlist-request
    {:playlist-id "3b5045a0-05fc-4d7f-8b61-9c6d37ab90e6"}])
 
-(get @cache cache-key) ;; Playlist response
+(get @cache-atom cache-key) ;; Playlist response
 ```
 
 #### Surgical lookup params
@@ -538,7 +558,7 @@ Let's parameterize the Spotify API host using a configuration map:
               :url (format "https://%s/playlists/%s"
                            (:spotify-host config)
                            playlist-id)
-              :oauth-token (:access_token token)})
+              :oauth-token token})
    :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
@@ -555,7 +575,7 @@ In order to include only the relevant key in the cache key,
               :url (format "https://%s/playlists/%s"
                            (:spotify-host config)
                            playlist-id)
-              :oauth-token (:access_token token)})
+              :oauth-token token})
    :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
@@ -584,12 +604,12 @@ token to identify the user.
 (def spotify-playlists-request
   {:lookup-id :spotify-playlists
    :params [:token :config]
-   :lookup-params [[:config :spotify-host] :token]
+   :lookup-params [:token [:config :spotify-host]]
    :req-fn (fn [{:keys [token config]}]
              {:method :get
               :url (format "https://%s/playlists/"
                            (:spotify-host config))
-              :oauth-token (:access_token token)})
+              :oauth-token token})
    :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
@@ -610,7 +630,7 @@ This caches with the token, which is no good. We can add
 (def spotify-playlists-request
   {:lookup-id :spotify-playlists
    :params [:token :config]
-   :lookup-params [[:config :spotify-host] :token]
+   :lookup-params [:token :config] ;; *)
    :prepare-lookup-params (fn [params]
                             {:host (get-in params [:config :spotify-host])
                              :user-id (:userId (decode-jwt (:token params)))})
@@ -618,7 +638,7 @@ This caches with the token, which is no good. We can add
              {:method :get
               :url (format "https://%s/playlists/"
                            (:spotify-host config))
-              :oauth-token (:access_token token)})
+              :oauth-token token})
    :cache-fn (http/cache-fn {:ttl (* 10 1000)})})
 ```
 
@@ -630,6 +650,9 @@ Which will result in the following cache key for the atom map caches:
    {:host "api.spotify.com"
     :user-id "3b5045a0-05fc-4d7f-8b61-9c6d37ab90e6"}])
 ```
+
+*) The `:lookup-params` are still needed to let Courier know which parameters
+must be realized before calling the `:prepare-lookup-params` function.
 
 ### Atom map cache
 
@@ -643,11 +666,12 @@ caches that go well with this Courier cache:
          '[courier.cache :refer [create-atom-map-cache]]
          '[clojure.core.cache :as cache])
 
-(def cache (atom (cache/lru-cache-factory {} :threshold 8192)))
+(def cache (create-atom-map-cache
+            (atom (cache/lru-cache-factory {} :threshold 8192))))
 
 (http/request
  spotify-playlist-request
- {:cache (create-atom-map-cache cache)
+ {:cache cache
   :params {:client-id "my-api-client"
            :client-secret "api-secret"
            :playlist-id "3abdc"
@@ -666,9 +690,11 @@ The file cache stores responses on disk. Give it a directory, and off you go.
 (require '[courier.http :as http]
          '[courier.cache :as cache])
 
+(def file-cache (cache/create-file-cache {:dir "/tmp/courier"}))
+
 (http/request
  spotify-playlist-request
- {:cache (cache/create-file-cache {:dir "/tmp/courier"})
+ {:cache file-cache
   :params {:client-id "my-api-client"
            :client-secret "api-secret"
            :playlist-id "3abdc"
@@ -704,9 +730,11 @@ Then create a cache with a pool spec:
     (.release-conn pool conn)
     pool-spec))
 
+(def redis-cache (cache/create-redis-cache pool-spec))
+
 (http/request
  spotify-playlist-request
- {:cache (cache/create-redis-cache pool-spec)
+ {:cache redis-cache
   :params {:client-id "my-api-client"
            :client-secret "api-secret"
            :playlist-id "3abdc"
@@ -717,12 +745,12 @@ Then create a cache with a pool spec:
 ## Events
 
 Even though `(courier.http/request spec)` looks like a single request, it can
-actually spawn multiple requests to several endpoints. Most of the time we're
-only interested in the end result, in which case `request` is just what the
-doctor ordered.
+spawn multiple requests to several endpoints. Most of the time we're only
+interested in the end result, in which case `request` is just what the doctor
+ordered.
 
-Sometimes we want more insight into the network layer of our application. Maybe
-you want to log each request on the way out and the response coming back.
+Sometimes you want more insight into the network layer of your application.
+Maybe you want to log each request on the way out and the response coming back.
 Courier does all its heavy lifting with `courier.http/make-requests`, but there
 is another medium-level abstraction on top of it: `request-with-log`. This
 function works just like `request`, except it also gives you a `core.async`
@@ -735,7 +763,7 @@ channel that emits events as they occur:
 (let [[log-ch result-ch]
       (http/request-with-log
        spotify-playlist-request
-       {:cache (courier-cache/create-atom-map-cache cache)
+       {:cache cache
         :params {:client-id "my-api-client"
                  :client-secret "api-secret"
                  :playlist-id "3abdc"
@@ -771,8 +799,11 @@ channel that emits events as they occur:
         (log/error event)
 
         ::http/failure
-        (log/error "Failed to complete request" event)))))
+        (log/error "Failed to complete request" event))
+      (recur)))
 ```
+
+The `log-ch` is closed when the request is complete.
 
 ## Testing
 
@@ -823,7 +854,7 @@ testing purposes:
 - `:cache-fn` - A function that is called if the response is a success. It is
   passed a map of `{:req :res}` and should return a map describing if and how
   the response may be cached, as described by the keys:
-  - `:cache?` - If `true`, the response will be cached _if a ttl is specified_.
+  - `:cache?` - If `true`, the response will be cached _if expires-at is specified_.
   - `:expires-at` - An epoch millis at which the response expires from the cache.
 
 ### `(courier.http/cache-fn {:ttl :ttl-fn :cacheable?})`
@@ -859,7 +890,7 @@ Include cache retrieval events in the `:log` in meta data returned from
 
 ### 2021.01.19
 
-Added support for `:prepare-lookup-params`, which allows for transformin the
+Added support for `:prepare-lookup-params`, which allows for transforming the
 lookup parameters before using them to store and retrieve items from the cache.
 
 Fix a bug where `POST` requests where not cached by default when `:cache-fn` was
