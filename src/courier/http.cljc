@@ -354,7 +354,7 @@
 (defn request-with-log [spec & [opt]]
   (let [ch (a/chan 512)]
     [ch
-     (a/go
+     (a/thread
        (->> (siphon!! (make-requests opt {::req spec}) ch)
             (prepare-full-result-for ::req opt)))]))
 
