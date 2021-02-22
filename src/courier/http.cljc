@@ -198,9 +198,9 @@
       (a/go
         (let [cached-paths (set (map :path cached))]
           {:specs specs
-           :ctx (merge ctx (->> cached
-                                (map (juxt :path prepare-for-context))
-                                (into {})))
+           :ctx (->> cached
+                     (map (juxt :path prepare-for-context))
+                     (into ctx))
            :ks (remove cached-paths ks)
            :exchanges all-exchanges})))))
 
@@ -216,8 +216,7 @@
        (keep (fn [k]
                (when-let [spec (k specs)]
                  [k (assoc spec :refresh? true)])))
-       (into {})
-       (merge specs)))
+       (into specs)))
 
 (defn request-pending [log specs ctx ks all-exchanges cache]
   (when-let [pending (seq (find-pending specs ctx ks all-exchanges))]
@@ -266,9 +265,10 @@
       (< (:max-retries (:retry (last reqs)) 0) (count reqs))
       (assoc (last reqs)
              :courier.error/reason :courier.error/retries-exhausted
-             :courier.error/data (merge {:attempts (count (requests-for exchanges k))
-                                         :last-res (-> reqs last :res)}
-                                        (select-keys (:retry (last reqs)) [:max-retries])))
+             :courier.error/data (cond-> {:attempts (count (requests-for exchanges k))
+                                          :last-res (-> reqs last :res)}
+                                   (-> reqs last :retry :max-retries)
+                                   (assoc :max-retries (-> reqs last :retry :max-retries))))
 
       ;; Shouldn't happen (tm)
       :default {:courier.error/reason :courier.error/unknown})))
