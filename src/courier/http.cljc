@@ -259,14 +259,16 @@
        :courier.error/data {:req (:req (last reqs))}}
 
       (= (:max-retries (:retry (last reqs)) 0) 0)
-      {:courier.error/reason :courier.error/request-failed
-       :courier.error/data (:res (last reqs))}
+      (assoc (last reqs)
+             :courier.error/reason :courier.error/request-failed
+             :courier.error/data (:res (last reqs)))
 
       (< (:max-retries (:retry (last reqs)) 0) (count reqs))
-      {:courier.error/reason :courier.error/retries-exhausted
-       :courier.error/data (merge {:attempts (count (requests-for exchanges k))
-                                   :last-res (-> reqs last :res)}
-                                  (select-keys (:retry (last reqs)) [:max-retries]))}
+      (assoc (last reqs)
+             :courier.error/reason :courier.error/retries-exhausted
+             :courier.error/data (merge {:attempts (count (requests-for exchanges k))
+                                         :last-res (-> reqs last :res)}
+                                        (select-keys (:retry (last reqs)) [:max-retries])))
 
       ;; Shouldn't happen (tm)
       :default {:courier.error/reason :courier.error/unknown})))
@@ -316,6 +318,11 @@
 (defn collect!! [ch]
   (siphon!! ch nil))
 
+(defn strip-duplicate-data [result]
+  (if (:courier.error/data result)
+    (dissoc result :req :res :success?)
+    result))
+
 (defn prepare-full-result-for [k opt events]
   (let [reqs (filter (comp #{::response ::cache-hit ::store-in-cache ::failed} :event) events)
         res (last (filter (comp #{k} :path) reqs))
@@ -330,7 +337,8 @@
      {:success? (boolean (:success? res))
       :log (->> reqs
                 (remove (comp #{::store-in-cache} :event))
-                (map #(dissoc % :path)))}
+                (map #(dissoc % :path))
+                (map strip-duplicate-data))}
      (when (= ::cache-hit (:event res))
        {:cache-status (assoc cache-status :cache-hit? true)})
      (when (= ::store-in-cache (:event res))

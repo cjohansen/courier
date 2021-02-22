@@ -870,6 +870,15 @@ result is cacheable.
 
 ## Changelog
 
+### 2021.02.22
+
+Failing requests now carry all the normal response keys directly on the result.
+Previously, a failed request, or a request that failed after a series of retries
+would only include the response in `(:courier.error/data res)`. With this
+change, the `:success?`, `:status`, `:headers`, and `:body` keys are available
+directly on the result, just like with successful results. The `courier.error`
+keys are still present, and contain the same data as before.
+
 ### 2021.01.26
 
 Specifically handle unknown host exceptions to make it clearer why a request

@@ -43,9 +43,9 @@
 (defn summarize-event [event]
   (into (vec (remove nil? ((juxt :event :path) event)))
         (cond
-          (:res event) [(summarize-res (:res event))]
           (:courier.error/reason event) [(:courier.error/reason event)
                                          (:courier.error/data event)]
+          (:res event) [(summarize-res (:res event))]
           (:throwable event) [(-> event :throwable .getMessage) (:source event)]
           :default [(summarize-req (:req event))])))
 
@@ -804,6 +804,36 @@
                                           :retries 1})}))
              :success?)
          false)))
+
+(deftest includes-failed-request-details-in-response
+  (is (= (-> (with-responses {[:get "http://example.com/"]
+                              [{:status 503
+                                :headers {"Content-Type" "bummer"}
+                                :body "Uh-oh"}]}
+               (sut/request
+                {:req {:url "http://example.com/"}}))
+             (select-keys [:success? :status :headers :body]))
+         {:success? false
+          :status 503
+          :headers {"Content-Type" "bummer"}
+          :body "Uh-oh"})))
+
+(deftest includes-response-on-exhausted-retry-failure
+  (is (= (with-responses {[:get "http://example.com/"]
+                          [{:status 500
+                            :headers {"Attempt" 1}
+                            :body "1"}
+                           {:status 500
+                            :headers {"Attempt" 2}
+                            :body "2"}]}
+           (-> (sut/request {:req {:url "http://example.com/"}
+                             :retry-fn (sut/retry-fn {:retries 1
+                                                      :delays [5 10 20]})})
+               (select-keys [:success? :status :headers :body])))
+         {:success? false
+          :status 500
+          :headers {"Attempt" 2}
+          :body "2"})))
 
 (deftest handles-exceptions-when-loading-cached-objects
   (is (= (->> (sut/make-requests
