@@ -158,13 +158,13 @@ way, and will never (intentionally) introduce other breaking changes.
 With tools.deps:
 
 ```clj
-cjohansen/courier {:mvn/version "2021.01.26"}
+cjohansen/courier {:mvn/version "2021.07.13"}
 ```
 
 With Leiningen:
 
 ```clj
-[cjohansen/courier "2021.01.26"]
+[cjohansen/courier "2021.07.13"]
 ```
 
 **NB!** Please do not be alarmed if the version/date seems "old" - this just
@@ -869,6 +869,11 @@ If you only want to cache some request/response pairs, pass a function to
 result is cacheable.
 
 ## Changelog
+
+### 2021.07.13
+
+Fail gracefully with a dedicated error keyword when trying to make requests
+without both a `:req` map and a `:req-fn` IFn.
 
 ### 2021.02.22
 
