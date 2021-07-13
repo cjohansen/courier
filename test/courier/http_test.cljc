@@ -237,6 +237,18 @@
            :courier.error/reason :courier.error/missing-params
            :courier.error/data [:spoken]}])))
 
+(deftest cannot-make-request-without-req-or-req-fn
+  (is (= (->> {:example {:params [:token]}}
+              (sut/make-requests
+               {:params
+                {:token "ejY-secret-..."
+                 :other "Stuff"}})
+              sut/collect!!)
+         [{:event ::sut/failed
+           :path :example
+           :courier.error/reason :courier.error/missing-req-or-req-fn
+           :courier.error/data {:spec {:params [:token]}}}])))
+
 (deftest makes-dependent-request-first
   (is (= (with-responses {[:post "http://example.com/security/"]
                           [{:status 200 :body {:token "ejY..."}}]}

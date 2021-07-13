@@ -25,10 +25,11 @@
   (with-meta f {:name n}))
 
 (defn prepare-request [log {:keys [req req-fn params]} ctx]
-  (let [req (or req (try-emit log (with-name req-fn "req-fn") (select-keys ctx params)))]
-    (-> req
-        (update :method #(or % :get))
-        (assoc :throw-exceptions false))))
+  (when (or (map? req) (ifn? req-fn))
+    (let [req (or req (try-emit log (with-name req-fn "req-fn") (select-keys ctx params)))]
+      (-> req
+          (update :method #(or % :get))
+          (assoc :throw-exceptions false)))))
 
 (defn success? [{:keys [spec req res]}]
   (let [f (or (:success? spec) (comp client/success? :res))]
@@ -133,18 +134,22 @@
           exchange {:path path
                     :spec spec
                     :req req}]
-      (emit log ::request exchange)
-      (let [result (a/<! (fulfill-exchange log exchange))
-            result (merge result
-                          (when-let [retry (get-retry-info result log exchanges)]
-                            {:retry retry})
-                          (when-let [cache (get-cache-info result log)]
-                            {:cache cache}))]
-        (emit log (cond
-                    (:res result) ::response
-                    (:exception result) ::exception) result)
-        (maybe-cache-result log spec ctx cache result)
-        result))))
+      (if req
+        (do
+          (emit log ::request exchange)
+          (let [result (a/<! (fulfill-exchange log exchange))
+                result (merge result
+                              (when-let [retry (get-retry-info result log exchanges)]
+                                {:retry retry})
+                              (when-let [cache (get-cache-info result log)]
+                                {:cache cache}))]
+            (emit log (cond
+                        (:res result) ::response
+                        (:exception result) ::exception) result)
+            (maybe-cache-result log spec ctx cache result)
+            result))
+        {:path path
+         :spec spec}))))
 
 (defn params-available? [ctx {:keys [params]}]
   (every? #(contains? ctx %) params))
@@ -256,6 +261,10 @@
       (unknown-host? (last reqs))
       {:courier.error/reason :courier.error/unknown-host
        :courier.error/data {:req (:req (last reqs))}}
+
+      (not (contains? (last reqs) :req))
+      {:courier.error/reason :courier.error/missing-req-or-req-fn
+       :courier.error/data (select-keys (last reqs) [:spec])}
 
       (= (:max-retries (:retry (last reqs)) 0) 0)
       (assoc (last reqs)
