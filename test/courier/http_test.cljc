@@ -801,6 +801,14 @@
           :url "http://example.com/"
           :params {:client-id "ID"}})))
 
+(deftest gracefully-handles-and-reports-throwing-req-fn
+  (is (= (-> (sut/request {:req-fn (fn [_]
+                                     (throw (ex-info "Boom" {:ok? false})))})
+             :log
+             first)
+         {:courier.error/reason :courier.error/req-fn-threw-exception
+          :event :courier.http/failed})))
+
 (deftest retries-failed-request
   (is (= (-> (with-responses {[:get "http://example.com/"]
                               [{:status 503

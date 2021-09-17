@@ -27,9 +27,11 @@
 (defn prepare-request [log {:keys [req req-fn params]} ctx]
   (when (or (map? req) (ifn? req-fn))
     (let [req (or req (try-emit log (with-name req-fn "req-fn") (select-keys ctx params)))]
-      (-> req
-          (update :method #(or % :get))
-          (assoc :throw-exceptions false)))))
+      (if req
+        {:req (-> req
+                  (update :method #(or % :get))
+                  (assoc :throw-exceptions false))}
+        {:error :req-fn-threw}))))
 
 (defn success? [{:keys [spec req res]}]
   (let [f (or (:success? spec) (comp client/success? :res))]
@@ -130,7 +132,7 @@
   (a/go
     (when-let [delay (get-retry-delay exchanges path)]
       (a/<! (a/timeout delay)))
-    (let [req (prepare-request log spec ctx)
+    (let [{:keys [req error]} (prepare-request log spec ctx)
           exchange {:path path
                     :spec spec
                     :req req}]
@@ -148,8 +150,9 @@
                         (:exception result) ::exception) result)
             (maybe-cache-result log spec ctx cache result)
             result))
-        {:path path
-         :spec spec}))))
+        (cond-> {:path path
+                 :spec spec}
+          error (assoc :error error))))))
 
 (defn params-available? [ctx {:keys [params]}]
   (every? #(contains? ctx %) params))
@@ -263,8 +266,10 @@
        :courier.error/data {:req (:req (last reqs))}}
 
       (not (contains? (last reqs) :req))
-      {:courier.error/reason :courier.error/missing-req-or-req-fn
-       :courier.error/data (select-keys (last reqs) [:spec])}
+      (if (= :req-fn-threw (-> exchanges last :error))
+        {:courier.error/reason :courier.error/req-fn-threw-exception}
+        {:courier.error/reason :courier.error/missing-req-or-req-fn
+         :courier.error/data (select-keys (last reqs) [:spec])})
 
       (= (:max-retries (:retry (last reqs)) 0) 0)
       (assoc (last reqs)
