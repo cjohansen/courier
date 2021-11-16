@@ -46,7 +46,7 @@
           (:courier.error/reason event) [(:courier.error/reason event)
                                          (:courier.error/data event)]
           (:res event) [(summarize-res (:res event))]
-          (:throwable event) [(-> event :throwable .getMessage) (:source event)]
+          (:throwable event) [(-> event ^Throwable (:throwable) .getMessage) (:source event)]
           :default [(summarize-req (:req event))])))
 
 ;; Unit tests

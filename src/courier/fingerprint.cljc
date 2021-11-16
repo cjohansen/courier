@@ -15,7 +15,8 @@
        :else x))
    data))
 
-(defn md5 [s]
+(defn md5 [#?(:clj ^String s
+              :cljs s)]
   #?(:clj
      (let [md (MessageDigest/getInstance "MD5")]
        (.update md (.getBytes s))
