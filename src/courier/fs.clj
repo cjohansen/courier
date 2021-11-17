@@ -16,12 +16,12 @@
   "Writes the file to a temporary file, then performs an atomic move, ensuring
   that cache files are never partial files."
   [file content]
-  (let [end-file (if (isa? File file) file (File. ^String file))
+  (let [^File end-file (if (isa? File file) file (File. ^String file))
         tmp-f (File/createTempFile (.getName end-file) ".tmp" (.getParentFile end-file))]
     (spit tmp-f content)
     (Files/move (.toPath tmp-f) (.toPath end-file) (into-array [StandardCopyOption/ATOMIC_MOVE]))))
 
-(defn ensure-dir [dir]
+(defn ensure-dir [^String dir]
   (.mkdirs (File. dir)))
 
 (defn dirname [path]

@@ -1,13 +1,15 @@
 (ns courier.time
-  #?(:clj (:import java.time.Instant)))
+  #?(:clj (:import (java.time Instant))))
 
-(defn now []
-  #?(:clj (java.time.Instant/now)
+(defn now #?(:clj ^Instant []
+             :cljs [])
+  #?(:clj (Instant/now)
      :cljs (.getTime (js/Date.))))
 
-(defn ->inst [i]
+(defn ->inst #?(:clj ^Instant [i]
+                :cljs [i])
   (if (number? i)
-    #?(:clj (java.time.Instant/ofEpochMilli i)
+    #?(:clj (Instant/ofEpochMilli i)
        :cljs (js/Date. i))
     i))
 
@@ -18,9 +20,9 @@
 (defn millis [t]
   (if (number? t)
     t
-    #?(:clj (.toEpochMilli t)
+    #?(:clj (.toEpochMilli ^Instant t)
        :cljs (.getTime t))))
 
 (defn add-millis [t ms]
-  #?(:clj (millis (.plusMillis t ms))
+  #?(:clj (millis (.plusMillis ^Instant t ms))
      :cljs (+ t ms)))
