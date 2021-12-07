@@ -248,22 +248,33 @@
            :ks (set (concat ks unresolved))
            :exchanges exchanges})))
 
-(defn unknown-host? [{:keys [exception]}]
-  (and exception
-       #?(:clj (instance? java.net.UnknownHostException exception)
-          :cljs false)))
+(defn known-error [{:keys [exception]}]
+  (when exception
+    #?(:clj (cond
+              (instance? java.net.UnknownHostException exception)
+              {:courier.error/reason :courier.error/unknown-host}
+
+              (instance? java.net.ConnectException exception)
+              {:courier.error/reason :courier.error/connection-refused}
+
+              (instance? java.net.SocketTimeoutException exception)
+              {:courier.error/reason :courier.error/socket-timeout}
+
+              (instance? java.net.http.HttpConnectTimeoutException exception)
+              {:courier.error/reason :courier.error/connection-timeout})
+       :cljs nil)))
 
 (defn explain-failed-request [specs ctx exchanges k]
   (let [spec (k specs)
-        reqs (requests-for exchanges k)]
+        reqs (requests-for exchanges k)
+        error-detail (known-error (last reqs))]
     (cond
       (not (params-available? ctx spec))
       {:courier.error/reason :courier.error/missing-params
        :courier.error/data (remove #(contains? ctx %) (:params spec))}
 
-      (unknown-host? (last reqs))
-      {:courier.error/reason :courier.error/unknown-host
-       :courier.error/data {:req (:req (last reqs))}}
+      error-detail
+      (assoc error-detail :courier.error/data {:req (:req (last reqs))})
 
       (not (contains? (last reqs) :req))
       (if (= :req-fn-threw (-> exchanges last :error))

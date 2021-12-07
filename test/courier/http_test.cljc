@@ -930,3 +930,44 @@
                                      :method :get
                                      :throw-exceptions false}}
           :event :courier.http/failed})))
+
+(defmethod client/request [:get "https://slowcathost"] [req]
+  (throw (java.net.SocketTimeoutException. "Boom!")))
+
+(deftest properly-communicates-socket-timeout
+  (is (= (-> (sut/request {:req {:url "https://slowcathost"
+                                 :socket-timeout 250}})
+             :log
+             last)
+         {:courier.error/reason :courier.error/socket-timeout
+          :courier.error/data {:req {:url "https://slowcathost"
+                                     :socket-timeout 250
+                                     :method :get
+                                     :throw-exceptions false}}
+          :event :courier.http/failed})))
+
+(defmethod client/request [:get "http://unconnectable"] [req]
+  (throw (java.net.ConnectException. "Boom!")))
+
+(deftest properly-communicates-connection-failure
+  (is (= (-> (sut/request {:req {:url "http://unconnectable"}})
+             :log
+             last)
+         {:courier.error/reason :courier.error/connection-refused
+          :courier.error/data {:req {:url "http://unconnectable"
+                                     :method :get
+                                     :throw-exceptions false}}
+          :event :courier.http/failed})))
+
+(defmethod client/request [:get "http://slow-connector"] [req]
+  (throw (java.net.http.HttpConnectTimeoutException. "Boom!")))
+
+(deftest properly-communicates-connection-timeout
+  (is (= (-> (sut/request {:req {:url "http://slow-connector"}})
+             :log
+             last)
+         {:courier.error/reason :courier.error/connection-timeout
+          :courier.error/data {:req {:url "http://slow-connector"
+                                     :method :get
+                                     :throw-exceptions false}}
+          :event :courier.http/failed})))

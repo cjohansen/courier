@@ -158,13 +158,13 @@ way, and will never (intentionally) introduce other breaking changes.
 With tools.deps:
 
 ```clj
-cjohansen/courier {:mvn/version "2021.09.17"}
+cjohansen/courier {:mvn/version "2021.12.07"}
 ```
 
 With Leiningen:
 
 ```clj
-[cjohansen/courier "2021.09.17"]
+[cjohansen/courier "2021.12.07"]
 ```
 
 **NB!** Please do not be alarmed if the version/date seems "old" - this just
@@ -860,8 +860,8 @@ testing purposes:
 ### `(courier.http/cache-fn {:ttl :ttl-fn :cacheable?})`
 
 Returns a function that can be passed as `:cache-fn` to `courier.http/request`.
-Either set `:ttl` to a number of milliseconds to cache results, or set `:ttl` to
-a function that will return the number of milliseconds. If set, it will be
+Either set `:ttl` to a number of milliseconds to cache results, or set `:ttl-fn`
+to a function that will return the number of milliseconds. If set, it will be
 passed a map of `:req` and `:res` to aid in the decision.
 
 If you only want to cache some request/response pairs, pass a function to
@@ -869,6 +869,19 @@ If you only want to cache some request/response pairs, pass a function to
 result is cacheable.
 
 ## Changelog
+
+### 2021.12.07
+
+Specifically handle connection and timeout exceptions, and return an error with
+`:courier.error/reason` set to one of the following keywords, rather than relay
+the entire exception object:
+
+- `:courier.error/connection-refused`
+- `:courier.error/socket-timeout`
+- `:courier.error/connection-timeout`
+
+These are reported in addition to the previously added
+`:courier.error/unknown-host`.
 
 ### 2021.09.17
 
