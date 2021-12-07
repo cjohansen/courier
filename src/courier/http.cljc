@@ -6,8 +6,31 @@
             [courier.time :as time])
   #?(:clj (:import java.time.Instant)))
 
+(defn get-known-error-reason [exception]
+  (when exception
+    #?(:clj
+       (cond
+         (instance? java.net.UnknownHostException exception)
+         :courier.error/unknown-host
+
+         (instance? java.net.ConnectException exception)
+         :courier.error/connection-refused
+
+         (instance? java.net.SocketTimeoutException exception)
+         :courier.error/socket-timeout
+
+         (instance? java.net.http.HttpConnectTimeoutException exception)
+         :courier.error/connection-timeout)
+       :cljs nil)))
+
+(defn tag-known-errors [{:keys [exception throwable] :as exchange}]
+  (if-let [reason (get-known-error-reason (or exception throwable))]
+    (assoc exchange :courier.error/reason reason)
+    exchange))
+
 (defn emit [ch event exchange]
   (a/put! ch (-> exchange
+                 tag-known-errors
                  (dissoc :spec)
                  (assoc :event event))))
 
@@ -85,7 +108,7 @@
                                   e)))))]
       (if (instance? #?(:clj Exception
                         :cljs Error) res)
-        (assoc exchange :exception res)
+        (tag-known-errors (assoc exchange :exception res))
         (prepare-result log (assoc exchange :res res))))))
 
 (def validations
@@ -248,33 +271,17 @@
            :ks (set (concat ks unresolved))
            :exchanges exchanges})))
 
-(defn known-error [{:keys [exception]}]
-  (when exception
-    #?(:clj (cond
-              (instance? java.net.UnknownHostException exception)
-              {:courier.error/reason :courier.error/unknown-host}
-
-              (instance? java.net.ConnectException exception)
-              {:courier.error/reason :courier.error/connection-refused}
-
-              (instance? java.net.SocketTimeoutException exception)
-              {:courier.error/reason :courier.error/socket-timeout}
-
-              (instance? java.net.http.HttpConnectTimeoutException exception)
-              {:courier.error/reason :courier.error/connection-timeout})
-       :cljs nil)))
-
 (defn explain-failed-request [specs ctx exchanges k]
   (let [spec (k specs)
-        reqs (requests-for exchanges k)
-        error-detail (known-error (last reqs))]
+        reqs (requests-for exchanges k)]
     (cond
       (not (params-available? ctx spec))
       {:courier.error/reason :courier.error/missing-params
        :courier.error/data (remove #(contains? ctx %) (:params spec))}
 
-      error-detail
-      (assoc error-detail :courier.error/data {:req (:req (last reqs))})
+      (:courier.error/reason (last reqs))
+      {:courier.error/reason (:courier.error/reason (last reqs))
+       :courier.error/data {:req (:req (last reqs))}}
 
       (not (contains? (last reqs) :req))
       (if (= :req-fn-threw (-> exchanges last :error))

@@ -41,13 +41,16 @@
   (into [status] (remove nil? [headers body])))
 
 (defn summarize-event [event]
-  (into (vec (remove nil? ((juxt :event :path) event)))
-        (cond
-          (:courier.error/reason event) [(:courier.error/reason event)
-                                         (:courier.error/data event)]
-          (:res event) [(summarize-res (:res event))]
-          (:throwable event) [(-> event ^Throwable (:throwable) .getMessage) (:source event)]
-          :default [(summarize-req (:req event))])))
+  (let [ex (or (:throwable event) (:exception event))]
+    (into (vec (remove nil? ((juxt :event :path) event)))
+          (cond
+            (:courier.error/reason event) [(:courier.error/reason event)
+                                           (or (:courier.error/data event)
+                                               (when ex
+                                                 (.getMessage ex)))]
+            (:res event) [(summarize-res (:res event))]
+            (:throwable event) [(-> event ^Throwable (:throwable) .getMessage) (:source event)]
+            :default [(summarize-req (:req event))]))))
 
 ;; Unit tests
 
@@ -971,3 +974,16 @@
                                      :method :get
                                      :throw-exceptions false}}
           :event :courier.http/failed})))
+
+(deftest properly-communicates-connection-timeout-on-events
+  (is (= (->> (sut/make-requests
+               {}
+               {:example {:req {:url "http://slow-connector"}}})
+              sut/collect!!
+              (map summarize-event))
+         '([:courier.http/request :example [:get "http://slow-connector"]]
+           [:courier.http/exception :example :courier.error/connection-timeout "Boom!"]
+           [:courier.http/failed :example :courier.error/connection-timeout
+            {:req {:url "http://slow-connector"
+                   :method :get
+                   :throw-exceptions false}}]))))
