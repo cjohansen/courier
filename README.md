@@ -67,7 +67,7 @@ more low-level HTTP clients:
       :form-params {:grant_type "client_credentials"}
       :basic-auth [client-id client-secret]})
 
-   :retry-fn (http/retry-fn {:retries 2}) ;; 3
+   :retry-fn (http/retry-fn {:retries 2 :retryable? (constantly true}) ;; 3
 
    :cache-fn (http/cache-fn
               {:ttl-fn #(-> % :res :body :expires_in (* 1000))})}) ;; 4
