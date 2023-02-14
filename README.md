@@ -434,12 +434,13 @@ and the request will fail.
 ## Caching
 
 Courier caching is provided by the `courier.cache/Cache` protocol, which defines
-the following two functions:
+the following three functions:
 
 ```clj
 (defprotocol Cache
   (lookup [_ spec params])
-  (put [_ spec params res]))
+  (put [_ spec params res])
+  (invalidate [_ spec params]))
 ```
 
 `spec` is the full map passed to `courier.http/request`. `params` is a map of
@@ -653,6 +654,36 @@ Which will result in the following cache key for the atom map caches:
 
 *) The `:lookup-params` are still needed to let Courier know which parameters
 must be realized before calling the `:prepare-lookup-params` function.
+
+### Cache invalidation
+
+You can invalidate an individual entry in the cache by passing the reified
+cache, the full `spec` map and the concrete params to
+`courier.http/invalidate-cache`:
+
+```clj
+(require '[courier.http :as http]
+         '[courier.cache :as courier-cache]
+         '[clojure.core.cache :as cache])
+
+(def cache-atom (atom (cache/lru-cache-factory {} :threshold 8192))) ;; def for inspection
+(def cache (courier-cache/create-atom-map-cache cache-atom))
+
+(def params
+ {:client-id "my-api-client"
+           :client-secret "api-secret"
+           :playlist-id "3abdc"
+           :token {::http/req spotify-token-request
+                   ::http/select (comp :access_token :body)}})
+
+(http/request
+ spotify-playlist-request
+ {:cache cache
+  :params params})
+
+;; Purge
+(http/invalidate-cache cache spotify-token-request params)
+```
 
 ### Atom map cache
 

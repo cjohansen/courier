@@ -1,12 +1,13 @@
 (ns courier.cache
   (:require [clojure.string :as str]
+            [courier.fingerprint :as fingerprint]
             [courier.fs :as fs]
-            [courier.time :as time]
-            [courier.fingerprint :as fingerprint]))
+            [courier.time :as time]))
 
 (defprotocol Cache
   (lookup [_ spec params])
-  (put [_ spec params res]))
+  (put [_ spec params res])
+  (invalidate [_ spec params]))
 
 (defn fname [f]
   (if-let [meta-name (-> f meta :name)]
@@ -91,7 +92,9 @@
     (put [_ spec params res]
       (let [k (cache-key spec params)]
         (swap! ref assoc k res)
-        {::key k}))))
+        {::key k}))
+    (invalidate [_ spec params]
+      (swap! ref dissoc (cache-key spec params)))))
 
 (defn str-id [spec]
   (let [id (cache-id spec)]
@@ -132,7 +135,10 @@
       (when-let [file (filename dir spec params)]
         (fs/ensure-dir (fs/dirname file))
         (fs/write-file file (pr-str (assoc res ::file-name file)))
-        {::file-name file}))))
+        {::file-name file}))
+    (invalidate [_ spec params]
+      (when-let [file (filename dir spec params)]
+        (fs/delete-file file)))))
 
 (def ^:private carmine-available?
   "Carmine/Redis is an optional dependency, so we try to load it runtime. If the
@@ -168,4 +174,7 @@
       (let [ttl (- (time/millis (:expires-at res)) (time/millis (time/now)))
             cache-key (redis-cache-key spec params)]
         (wcar conn-opts (redis-f :psetex cache-key ttl (assoc res ::key cache-key)))
-        {::key cache-key}))))
+        {::key cache-key}))
+    (invalidate [_ spec params]
+      (let [cache-key (redis-cache-key spec params)]
+        (wcar conn-opts (redis-f :del cache-key))))))

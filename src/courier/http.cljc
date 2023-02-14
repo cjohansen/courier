@@ -425,3 +425,9 @@
           {:cache? true
            :expires-at (time/add-millis (time/now) ttl)
            :ttl ttl})))))
+
+(defn invalidate-cache [cache spec params]
+  (let [specs (extract-specs params)
+        ctx (apply dissoc params (keys specs))
+        {:keys [params]} (lookup-params spec ctx)]
+    (cache/invalidate cache spec (prepare-lookup-params spec params))))

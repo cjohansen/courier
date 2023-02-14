@@ -664,6 +664,35 @@
            [:get "https://example.com/api" {"Authorization" "Bearer ejY...."}]]
           [::sut/response :example [200 {:stuff "Stuff"}]]])))
 
+(deftest purges-cache
+  (is (= (with-responses
+           {[:post "http://example.com/security/"]
+            [{:status 200
+              :body {:token "lol"}}]
+
+            [:get "http://example.com/42"]
+            [{:status 200
+              :body {:yep "Indeed"}}
+             {:status 200
+              :body {:yep "Fresh, definitely not from the cache"}}]}
+           (let [cache (cache/create-atom-map-cache (atom {}))
+                 spec {:lookup-id :example
+                       :req-fn (fn [{:keys [id token config]}]
+                                 {:url (str "http://" (:host config) "/" id)
+                                  :headers {"Authorization" (str "Bearer " token)}})
+                       :params [:id :config :token]
+                       :lookup-params [[:config :host] :id]
+                       :cache-fn (sut/cache-fn {:ttl (* 5 60 1000)})}
+                 params {:token "lolololol"
+                         :id 42
+                         :config {:host "example.com"
+                                  :debug? true}}]
+             (sut/request spec {:cache cache, :params params})
+             (sut/invalidate-cache cache spec params)
+             (-> (sut/request spec {:cache cache, :params params})
+                 :body)))
+         {:yep "Fresh, definitely not from the cache"})))
+
 ;; request tests
 
 (deftest makes-basic-request
