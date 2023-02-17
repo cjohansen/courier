@@ -901,6 +901,11 @@ result is cacheable.
 
 ## Changelog
 
+### 2023.02.17
+
+Added `courier.http/invalidate-cache` and `courier.cache/invalidate`, see [cache
+invalidation](#cache-invalidation).
+
 ### 2021.12.08
 
 Specifically handle connection and timeout exceptions, and return an error with
