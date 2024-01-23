@@ -89,8 +89,8 @@ more low-level HTTP clients:
 
    :cache-fn (http/cache-fn {:ttl (* 10 1000)})}) ;; 7
 
-(def cache (-> (atom (cache/lru-cache-factory {} :threshold 8192))) ;; 8
-               (courier-cache/create-atom-map-cache)) ;; 9
+(def cache (-> (atom (cache/lru-cache-factory {} :threshold 8192)) ;; 8
+               (courier-cache/create-atom-map-cache))) ;; 9
 
 (http/request ;; 10
  spotify-playlist-request
