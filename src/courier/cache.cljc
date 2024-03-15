@@ -143,10 +143,11 @@
 (def ^:private carmine-available?
   "Carmine/Redis is an optional dependency, so we try to load it runtime. If the
   dependency is available, the redis cache can be used."
-  (try
-    (require 'taoensso.carmine)
-    true
-    (catch Throwable _ false)))
+  #?(:clj
+     (try
+       (require 'taoensso.carmine)
+       true
+       (catch Throwable _ false))))
 
 (defmacro wcar [& body]
   (when carmine-available?
