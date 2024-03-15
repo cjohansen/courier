@@ -158,13 +158,13 @@ way, and will never (intentionally) introduce other breaking changes.
 With tools.deps:
 
 ```clj
-cjohansen/courier {:mvn/version "2021.12.08"}
+cjohansen/courier {:mvn/version "2024.03.15"}
 ```
 
 With Leiningen:
 
 ```clj
-[cjohansen/courier "2021.12.08"]
+[cjohansen/courier "2024.03.15"]
 ```
 
 **NB!** Please do not be alarmed if the version/date seems "old" - this just
@@ -901,6 +901,10 @@ result is cacheable.
 
 ## Changelog
 
+### 2024.03.15
+
+Make sure `courier.cache` loads without error in ClojureScript.
+
 ### 2023.02.17
 
 Added `courier.http/invalidate-cache` and `courier.cache/invalidate`, see [cache
@@ -984,7 +988,7 @@ contributor to the design of the API.
 
 ## License
 
-Copyright © 2020-2021 Christian Johansen
+Copyright © 2020-2024 Christian Johansen
 
 Distributed under the Eclipse Public License either version 1.0 or (at your
 option) any later version.
